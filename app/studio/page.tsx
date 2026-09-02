@@ -1,4 +1,4 @@
-import Home from '@/app/page';
+import { ClearPathStudio } from '@/components/studio/clearpath-studio';
 
 export const metadata = {
   title: 'ClearPath Studio — Accessibility planning canvas',
@@ -7,5 +7,5 @@ export const metadata = {
 };
 
 export default function StudioPage() {
-  return <Home showLanding={false} />;
+  return <ClearPathStudio />;
 }

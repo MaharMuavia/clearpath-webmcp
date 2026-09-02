@@ -1,46 +1,79 @@
-# ClearPath demo script — target 2:35
+# ClearPath demo script — 2:45 target
 
-## 0:00–0:18 — The problem
+## 0:00–0:15 — Establish the problem
 
-“AI agents can fill forms, but a floor-plan canvas is different. Its meaning lives in geometry, constraints, and visual state. This classroom has a blocked accessible route, and ordinary browser automation cannot reliably reason about it.”
+Open `/studio` on the blocked North Hall classroom. Point to the measured issue list, 0 cm minimum clear width, and the route/required zones drawn from the same model.
 
-## 0:18–0:42 — Shared state
+Say: “ClearPath is an accessibility planning aid. This is calculated geometry, not a scripted score and not legal certification.”
 
-Show North Hall, the 68 route score, 42-seat capacity, and three issues. Open Site tools.
+## 0:15–0:35 — Audit through real WebMCP
 
-“ClearPath exposes the live plan through focused WebMCP tools. The person and agent share this exact page, venue, issue selection, and plan history.”
+Prompt ChatGPT:
 
-## 0:42–1:08 — Agent audit
+> Audit the current access route and focus the most severe measured issue.
 
-Prompt: “Audit this plan and focus the most serious accessibility issue.”
+Show the real `audit_access_routes` result: plan version, route length, clearance, capacity, score, object ID, severity, and measured/required values. Then show `focus_audit_issue` visibly highlighting the referenced object.
 
-Show `audit_access_routes` followed by `focus_audit_issue`. The storage bottleneck becomes selected.
+## 0:35–0:55 — Prove structured state
 
-“The agent receives structured object references rather than guessing from pixels, and its focus call updates the same interface I’m reviewing.”
+Prompt:
 
-## 1:08–1:38 — Constrained proposal
+> Give me the exact geometry behind that issue, including the route points, object coordinates, locks, and required zones.
 
-Prompt: “Stage a better route. Preserve at least 40 seats and do not move locked objects.”
+Briefly show `get_plan_geometry`. Emphasize that object identity, centimetre coordinates, capacity contribution, locks, and semantic zones cannot be recovered reliably from pixels.
 
-Show the storage cabinet and desk move, ghost positions, score rise to 94, and staged badge.
+## 0:55–1:15 — Add human constraints
 
-“The planning engine rejects impossible constraints, preserves the locked presentation wall and all 42 seats, and stages changes before anything is committed.”
+In the visible UI, lock Desk 2 and leave required capacity at 24. Then prompt:
 
-## 1:38–2:02 — Compare
+> Respect my current locks and all 24 seats. Generate the two best route alternatives.
 
-Prompt: “Compare this proposal with the original.”
+Show two different `generate_route_alternatives` results. Point out different movement coordinates, objective explanations, and trade-offs—not just differently worded copies.
 
-Show the comparison panel: score, clearance, capacity, open issues, and explanation.
+## 1:15–1:40 — Stage and compare
 
-“This is the collaboration boundary: the agent explores; the human reviews the visible trade-off.”
+Prompt:
 
-## 2:02–2:22 — Human approval and auditability
+> Stage the highest-ranked alternative and compare it with the committed version.
 
-Click Approve or ask the agent to apply the staged plan. Open History, then Undo.
+Show the ghost rectangles at original positions and proposed objects at their generated coordinates. Show `compare_plan_versions`: before/after metrics, deltas, exact movements, resolved/remaining issues, preserved constraints, and trade-offs.
 
-“The commit tool exists only while a proposal is staged. Approval is recorded, and every applied change remains reversible.”
+## 1:40–2:00 — Human approval gate
 
-## 2:22–2:35 — Close
+Prompt:
 
-“ClearPath shows what WebMCP unlocks beyond form filling: safe, agent-native collaboration inside complex visual software.”
+> Request approval for this staged plan. Do not commit it silently.
 
+Show `apply_staged_plan` returning `approvalRequired: true` and `committed: false`. The comparison opens. Explicitly click **Approve and apply** yourself.
+
+Say: “The agent can prepare the decision. A person commits it.”
+
+## 2:00–2:20 — Re-audit the applied geometry
+
+Prompt:
+
+> Re-audit the now-committed plan and explain exactly what changed.
+
+Show that the returned version and metrics match the visible applied plan and that resolved issues changed because coordinates changed.
+
+## 2:20–2:35 — History and exact undo
+
+Prompt:
+
+> Show the audit history, then undo the last approved plan change.
+
+Show real actor/action/result/version records. Run undo and show the exact original geometry and metrics restored.
+
+## 2:35–2:45 — Close on WebMCP
+
+Say: “DOM clicking or screenshot interpretation cannot reliably reproduce route topology, centimetre clearance, hidden locks, version lineage, candidate validity, or exact deltas. WebMCP lets the agent reason over the same structured plan the human reviews.”
+
+End on the ClearPath wordmark and disclaimer.
+
+## Recording checklist
+
+- Use real ChatGPT/WebMCP tool calls, not only UI clicks.
+- Keep tool payloads readable long enough to see coordinates and deltas.
+- Show two alternatives side by side.
+- Do not call the heuristic a compliance score or certification.
+- Do not imply rotated-object collision support or multi-user persistence.
