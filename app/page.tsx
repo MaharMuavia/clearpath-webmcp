@@ -24,6 +24,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -54,7 +55,11 @@ const desks = [
   [605, 340],
 ];
 
-export default function Home() {
+export default function Home({
+  showLanding = true,
+}: {
+  showLanding?: boolean;
+}) {
   const [scenario, setScenario] = useState<ScenarioId>('classroom');
   const [selectedIssueId, setSelectedIssueId] = useState('bottleneck-storage');
   const [phase, setPhase] = useState<PlanPhase>('baseline');
@@ -125,313 +130,317 @@ export default function Home() {
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#edf2ec] text-[#17221b]">
-      <LandingHero />
-      <div id="studio" className="scroll-mt-0 border-t border-[#cbd7ce]">
-        <header className="flex h-[68px] items-center justify-between border-b border-[#d4ddd4] bg-[#f8faf6]/95 px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <div className="grid size-9 place-items-center rounded-xl bg-[#163f31] text-[#eaffbd] shadow-sm">
-              <Route className="size-[19px]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[15px] font-bold tracking-[-0.02em]">
-                  ClearPath
-                </span>
-                <Badge className="h-[18px] bg-[#e8f6c9] px-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-[#315c22]">
-                  WebMCP
-                </Badge>
+      {showLanding && <LandingHero />}
+      {!showLanding && (
+        <div id="studio" className="scroll-mt-0 border-t border-[#cbd7ce]">
+          <header className="flex h-[68px] items-center justify-between border-b border-[#d4ddd4] bg-[#f8faf6]/95 px-4 sm:px-6">
+            <div className="flex items-center gap-3">
+              <div className="grid size-9 place-items-center rounded-xl bg-[#163f31] text-[#eaffbd] shadow-sm">
+                <Route className="size-[19px]" />
               </div>
-              <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#718078]">
-                Human + agent spatial planning
-              </p>
-            </div>
-          </div>
-          <div className="hidden items-center gap-2 md:flex">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c9d7c9] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#456052]">
-              <span className="size-1.5 rounded-full bg-[#2b9b5c] shadow-[0_0_0_3px_#dcf4e5]" />
-              7 site tools designed
-            </span>
-            <Button
-              onClick={undo}
-              disabled={phase === 'baseline'}
-              variant="outline"
-              className="h-8 border-[#c9d7c9] bg-white text-xs"
-            >
-              <Undo2 /> Undo
-            </Button>
-            <Button
-              onClick={() => setView('history')}
-              className="h-8 bg-[#163f31] px-3 text-xs text-white hover:bg-[#225a46]"
-            >
-              View audit trail <ArrowRight />
-            </Button>
-          </div>
-        </header>
-
-        <section className="grid min-h-[calc(100vh-68px)] grid-cols-1 lg:grid-cols-[235px_minmax(560px,1fr)_310px]">
-          <aside className="hidden border-r border-[#d4ddd4] bg-[#f5f8f2] p-4 lg:flex lg:flex-col">
-            <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#7a887e]">
-              Venue projects
-            </p>
-            <div className="space-y-1.5">
-              {(Object.keys(SCENARIOS) as ScenarioId[]).map((key) => {
-                const item = SCENARIOS[key];
-                const active = scenario === key;
-                const itemIssues = getAuditIssues(key, 'baseline').length;
-                return (
-                  <button
-                    aria-label={`Open ${item.name} project`}
-                    key={key}
-                    onClick={() => selectScenario(key)}
-                    className={`w-full rounded-xl border p-3 text-left transition ${active ? 'border-[#b7cbb9] bg-white shadow-[0_5px_18px_rgba(35,62,45,0.08)]' : 'border-transparent hover:bg-white/70'}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-[13px] font-bold">{item.name}</p>
-                        <p className="mt-0.5 text-[10px] text-[#728077]">
-                          {item.type}
-                        </p>
-                      </div>
-                      <span
-                        className={`mt-1 size-2 rounded-full ${itemIssues > 2 ? 'bg-[#e97a48]' : 'bg-[#e5ad36]'}`}
-                      />
-                    </div>
-                    <div className="mt-3 flex gap-3 text-[10px] font-semibold text-[#607067]">
-                      <span>{item.capacity} seats</span>
-                      <span>{itemIssues} issues</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-auto rounded-2xl bg-[#173f31] p-4 text-white shadow-[0_12px_28px_rgba(23,63,49,0.18)]">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="grid size-8 place-items-center rounded-lg bg-white/10">
-                  <Bot className="size-4 text-[#dfff9a]" />
-                </div>
-                <Sparkles className="size-4 text-[#dfff9a]" />
-              </div>
-              <p className="text-[13px] font-bold">
-                Designed for shared decisions
-              </p>
-              <p className="mt-1.5 text-[10px] leading-relaxed text-white/65">
-                The agent reads structured geometry. You keep control of
-                constraints and every committed change.
-              </p>
-              <button className="mt-3 text-[10px] font-bold text-[#dfff9a]">
-                Why WebMCP →
-              </button>
-            </div>
-          </aside>
-
-          <section className="min-w-0 p-3 sm:p-5">
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <div className="mb-1.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.13em] text-[#76837b]">
-                  <Map className="size-3.5" /> Live floor plan{' '}
-                  <span className="text-[#b7c1ba]">/</span> Ground floor
+                <div className="flex items-center gap-2">
+                  <span className="text-[15px] font-bold tracking-[-0.02em]">
+                    ClearPath
+                  </span>
+                  <Badge className="h-[18px] bg-[#e8f6c9] px-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-[#315c22]">
+                    WebMCP
+                  </Badge>
                 </div>
-                <h1 className="text-2xl font-bold tracking-[-0.04em]">
-                  {current.name}
-                </h1>
-              </div>
-              <div className="flex items-center rounded-xl border border-[#d2ddd2] bg-white p-1 shadow-sm">
-                <ViewButton
-                  active={view === 'plan'}
-                  onClick={() => setView('plan')}
-                >
-                  Plan
-                </ViewButton>
-                <ViewButton
-                  active={view === 'compare'}
-                  onClick={() => setView('compare')}
-                >
-                  Compare
-                </ViewButton>
-                <ViewButton
-                  active={view === 'history'}
-                  onClick={() => setView('history')}
-                >
-                  History
-                </ViewButton>
-              </div>
-            </div>
-            <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
-              <Metric
-                icon={<Accessibility />}
-                value={String(metrics.score)}
-                suffix="/100"
-                label="Route score"
-                tone="lime"
-              />
-              <Metric
-                icon={<Users />}
-                value={String(metrics.capacity)}
-                suffix=" seats"
-                label="Current capacity"
-                tone="green"
-              />
-              <Metric
-                icon={<CircleAlert />}
-                value={String(metrics.openIssues)}
-                suffix=" open"
-                label="Planning issues"
-                tone="orange"
-              />
-            </div>
-
-            {view === 'plan' && (
-              <PlanCanvas
-                phase={phase}
-                selectedIssueId={selectedIssueId}
-                scenario={scenario}
-              />
-            )}
-            {view === 'compare' && (
-              <ComparePanel
-                baseline={baselineMetrics}
-                current={metrics}
-                hasProposal={phase !== 'baseline'}
-                onStage={() => stageProposal(Math.max(1, current.capacity - 2))}
-              />
-            )}
-            {view === 'history' && (
-              <HistoryPanel phase={phase} venueName={current.name} />
-            )}
-          </section>
-
-          <aside className="border-l border-[#d4ddd4] bg-[#f8faf6] p-4 sm:p-5">
-            <div className="mb-5 flex items-start justify-between">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#79867e]">
-                  Live audit
+                <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#718078]">
+                  Human + agent spatial planning
                 </p>
-                <h2 className="mt-1 text-lg font-bold tracking-[-0.03em]">
-                  Agent-readable issues
-                </h2>
               </div>
-              <span className="grid size-8 place-items-center rounded-xl bg-[#e9f4d7] text-[#3e6a2d]">
-                <Accessibility className="size-4" />
+            </div>
+            <div className="hidden items-center gap-2 md:flex">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c9d7c9] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#456052]">
+                <span className="size-1.5 rounded-full bg-[#2b9b5c] shadow-[0_0_0_3px_#dcf4e5]" />
+                7 site tools designed
               </span>
+              <Button
+                onClick={undo}
+                disabled={phase === 'baseline'}
+                variant="outline"
+                className="h-8 border-[#c9d7c9] bg-white text-xs"
+              >
+                <Undo2 /> Undo
+              </Button>
+              <Button
+                onClick={() => setView('history')}
+                className="h-8 bg-[#163f31] px-3 text-xs text-white hover:bg-[#225a46]"
+              >
+                View audit trail <ArrowRight />
+              </Button>
             </div>
-            <div className="space-y-2">
-              {issues.map((issue) => (
-                <button
-                  key={issue.id}
-                  onClick={() => focusIssue(issue.id)}
-                  className={`w-full rounded-xl border p-3 text-left transition ${selectedIssueId === issue.id ? 'border-[#d6ad8e] bg-[#fffaf5] shadow-sm' : 'border-[#dfe5dd] bg-white hover:border-[#cbd6ca]'}`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[12px] font-bold">{issue.title}</p>
-                    <Badge
-                      variant="outline"
-                      className={`h-[18px] px-1.5 text-[9px] ${issue.severity === 'critical' ? 'border-[#f2c1a7] bg-[#fff0e8] text-[#ae4e28]' : 'border-[#ead9a6] bg-[#fff9df] text-[#8a6512]'}`}
+          </header>
+
+          <section className="grid min-h-[calc(100vh-68px)] grid-cols-1 lg:grid-cols-[235px_minmax(560px,1fr)_310px]">
+            <aside className="hidden border-r border-[#d4ddd4] bg-[#f5f8f2] p-4 lg:flex lg:flex-col">
+              <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#7a887e]">
+                Venue projects
+              </p>
+              <div className="space-y-1.5">
+                {(Object.keys(SCENARIOS) as ScenarioId[]).map((key) => {
+                  const item = SCENARIOS[key];
+                  const active = scenario === key;
+                  const itemIssues = getAuditIssues(key, 'baseline').length;
+                  return (
+                    <button
+                      aria-label={`Open ${item.name} project`}
+                      key={key}
+                      onClick={() => selectScenario(key)}
+                      className={`w-full rounded-xl border p-3 text-left transition ${active ? 'border-[#b7cbb9] bg-white shadow-[0_5px_18px_rgba(35,62,45,0.08)]' : 'border-transparent hover:bg-white/70'}`}
                     >
-                      {issue.severity === 'critical' ? 'Critical' : 'Review'}
-                    </Badge>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-[13px] font-bold">{item.name}</p>
+                          <p className="mt-0.5 text-[10px] text-[#728077]">
+                            {item.type}
+                          </p>
+                        </div>
+                        <span
+                          className={`mt-1 size-2 rounded-full ${itemIssues > 2 ? 'bg-[#e97a48]' : 'bg-[#e5ad36]'}`}
+                        />
+                      </div>
+                      <div className="mt-3 flex gap-3 text-[10px] font-semibold text-[#607067]">
+                        <span>{item.capacity} seats</span>
+                        <span>{itemIssues} issues</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-auto rounded-2xl bg-[#173f31] p-4 text-white shadow-[0_12px_28px_rgba(23,63,49,0.18)]">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="grid size-8 place-items-center rounded-lg bg-white/10">
+                    <Bot className="size-4 text-[#dfff9a]" />
                   </div>
-                  <p className="mt-1.5 text-[10px] leading-relaxed text-[#718078]">
-                    {issue.description}
-                  </p>
+                  <Sparkles className="size-4 text-[#dfff9a]" />
+                </div>
+                <p className="text-[13px] font-bold">
+                  Designed for shared decisions
+                </p>
+                <p className="mt-1.5 text-[10px] leading-relaxed text-white/65">
+                  The agent reads structured geometry. You keep control of
+                  constraints and every committed change.
+                </p>
+                <button className="mt-3 text-[10px] font-bold text-[#dfff9a]">
+                  Why WebMCP →
                 </button>
-              ))}
-              {issues.length === 0 && (
-                <div className="rounded-xl border border-[#bbd8bd] bg-[#f0f9ed] p-4 text-center">
-                  <Check className="mx-auto size-5 text-[#37824f]" />
-                  <p className="mt-2 text-[11px] font-bold">
-                    No route issues remain
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="mt-5 rounded-2xl border border-[#c8d7c9] bg-white p-4 shadow-[0_8px_28px_rgba(32,62,43,0.07)]">
-              <div className="flex items-center gap-2">
-                <span className="grid size-7 place-items-center rounded-lg bg-[#173f31] text-[#e4ffa7]">
-                  <Bot className="size-3.5" />
-                </span>
+              </div>
+            </aside>
+
+            <section className="min-w-0 p-3 sm:p-5">
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-bold">Ask your agent</p>
-                  <p className="text-[9px] text-[#7b887f]">
-                    Shared state, visible changes
-                  </p>
+                  <div className="mb-1.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.13em] text-[#76837b]">
+                    <Map className="size-3.5" /> Live floor plan{' '}
+                    <span className="text-[#b7c1ba]">/</span> Ground floor
+                  </div>
+                  <h1 className="text-2xl font-bold tracking-[-0.04em]">
+                    {current.name}
+                  </h1>
+                </div>
+                <div className="flex items-center rounded-xl border border-[#d2ddd2] bg-white p-1 shadow-sm">
+                  <ViewButton
+                    active={view === 'plan'}
+                    onClick={() => setView('plan')}
+                  >
+                    Plan
+                  </ViewButton>
+                  <ViewButton
+                    active={view === 'compare'}
+                    onClick={() => setView('compare')}
+                  >
+                    Compare
+                  </ViewButton>
+                  <ViewButton
+                    active={view === 'history'}
+                    onClick={() => setView('history')}
+                  >
+                    History
+                  </ViewButton>
                 </div>
               </div>
-              <div className="mt-3 rounded-xl bg-[#f1f5ee] p-3 text-[10px] leading-relaxed text-[#45564b]">
-                “Fix the route to the primary destination. Keep{' '}
-                {Math.max(1, current.capacity - 2)} seats and don’t move locked
-                objects.”
+              <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
+                <Metric
+                  icon={<Accessibility />}
+                  value={String(metrics.score)}
+                  suffix="/100"
+                  label="Route score"
+                  tone="lime"
+                />
+                <Metric
+                  icon={<Users />}
+                  value={String(metrics.capacity)}
+                  suffix=" seats"
+                  label="Current capacity"
+                  tone="green"
+                />
+                <Metric
+                  icon={<CircleAlert />}
+                  value={String(metrics.openIssues)}
+                  suffix=" open"
+                  label="Planning issues"
+                  tone="orange"
+                />
               </div>
-              <div className="mt-3 flex items-center gap-2 text-[9px] font-semibold text-[#607067]">
-                <Check className="size-3.5 text-[#3b8a55]" /> Agent stages
-                changes before you approve
-              </div>
-              {phase === 'baseline' && (
-                <Button
-                  onClick={() =>
+
+              {view === 'plan' && (
+                <PlanCanvas
+                  phase={phase}
+                  selectedIssueId={selectedIssueId}
+                  scenario={scenario}
+                />
+              )}
+              {view === 'compare' && (
+                <ComparePanel
+                  baseline={baselineMetrics}
+                  current={metrics}
+                  hasProposal={phase !== 'baseline'}
+                  onStage={() =>
                     stageProposal(Math.max(1, current.capacity - 2))
                   }
-                  className="mt-3 h-8 w-full bg-[#173f31] text-[10px] text-white hover:bg-[#255944]"
-                >
-                  <Sparkles /> Stage agent proposal
-                </Button>
+                />
               )}
-              {phase === 'staged' && (
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <Button
-                    onClick={applyProposal}
-                    className="h-8 bg-[#173f31] text-[10px] text-white"
-                  >
-                    <Check /> Approve
-                  </Button>
-                  <Button
-                    onClick={undo}
-                    variant="outline"
-                    className="h-8 text-[10px]"
-                  >
-                    <X /> Reject
-                  </Button>
+              {view === 'history' && (
+                <HistoryPanel phase={phase} venueName={current.name} />
+              )}
+            </section>
+
+            <aside className="border-l border-[#d4ddd4] bg-[#f8faf6] p-4 sm:p-5">
+              <div className="mb-5 flex items-start justify-between">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#79867e]">
+                    Live audit
+                  </p>
+                  <h2 className="mt-1 text-lg font-bold tracking-[-0.03em]">
+                    Agent-readable issues
+                  </h2>
                 </div>
-              )}
-              {phase === 'applied' && (
-                <div className="mt-3 flex items-center gap-2 rounded-lg bg-[#e7f4df] p-2 text-[10px] font-bold text-[#356f41]">
-                  <Check className="size-3.5" /> Change approved and applied
-                </div>
-              )}
-            </div>
-            <div className="mt-5">
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.13em] text-[#7a877f]">
-                Design constraints
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {['≥ 40 seats', 'Stage locked', 'Minimize moves'].map(
-                  (constraint) => (
-                    <Badge
-                      key={constraint}
-                      variant="outline"
-                      className="border-[#ccd8cc] bg-white text-[9px] text-[#516359]"
-                    >
-                      <Lock className="size-2.5" />
-                      {constraint}
-                    </Badge>
-                  ),
+                <span className="grid size-8 place-items-center rounded-xl bg-[#e9f4d7] text-[#3e6a2d]">
+                  <Accessibility className="size-4" />
+                </span>
+              </div>
+              <div className="space-y-2">
+                {issues.map((issue) => (
+                  <button
+                    key={issue.id}
+                    onClick={() => focusIssue(issue.id)}
+                    className={`w-full rounded-xl border p-3 text-left transition ${selectedIssueId === issue.id ? 'border-[#d6ad8e] bg-[#fffaf5] shadow-sm' : 'border-[#dfe5dd] bg-white hover:border-[#cbd6ca]'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[12px] font-bold">{issue.title}</p>
+                      <Badge
+                        variant="outline"
+                        className={`h-[18px] px-1.5 text-[9px] ${issue.severity === 'critical' ? 'border-[#f2c1a7] bg-[#fff0e8] text-[#ae4e28]' : 'border-[#ead9a6] bg-[#fff9df] text-[#8a6512]'}`}
+                      >
+                        {issue.severity === 'critical' ? 'Critical' : 'Review'}
+                      </Badge>
+                    </div>
+                    <p className="mt-1.5 text-[10px] leading-relaxed text-[#718078]">
+                      {issue.description}
+                    </p>
+                  </button>
+                ))}
+                {issues.length === 0 && (
+                  <div className="rounded-xl border border-[#bbd8bd] bg-[#f0f9ed] p-4 text-center">
+                    <Check className="mx-auto size-5 text-[#37824f]" />
+                    <p className="mt-2 text-[11px] font-bold">
+                      No route issues remain
+                    </p>
+                  </div>
                 )}
               </div>
-            </div>
-            <output
-              aria-live="polite"
-              className="mt-5 block rounded-lg border border-[#d8e2d7] bg-white p-2.5 text-[9px] leading-relaxed text-[#5d6f63]"
-            >
-              {announcement}
-            </output>
-            <p className="mt-4 border-t border-[#dce4dc] pt-4 text-[9px] leading-relaxed text-[#87938b]">
-              Planning aid only. ClearPath does not certify compliance with
-              local building codes or replace review by a qualified
-              accessibility professional.
-            </p>
-          </aside>
-        </section>
-      </div>
-      <LandingFooter />
+              <div className="mt-5 rounded-2xl border border-[#c8d7c9] bg-white p-4 shadow-[0_8px_28px_rgba(32,62,43,0.07)]">
+                <div className="flex items-center gap-2">
+                  <span className="grid size-7 place-items-center rounded-lg bg-[#173f31] text-[#e4ffa7]">
+                    <Bot className="size-3.5" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-bold">Ask your agent</p>
+                    <p className="text-[9px] text-[#7b887f]">
+                      Shared state, visible changes
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-xl bg-[#f1f5ee] p-3 text-[10px] leading-relaxed text-[#45564b]">
+                  “Fix the route to the primary destination. Keep{' '}
+                  {Math.max(1, current.capacity - 2)} seats and don’t move
+                  locked objects.”
+                </div>
+                <div className="mt-3 flex items-center gap-2 text-[9px] font-semibold text-[#607067]">
+                  <Check className="size-3.5 text-[#3b8a55]" /> Agent stages
+                  changes before you approve
+                </div>
+                {phase === 'baseline' && (
+                  <Button
+                    onClick={() =>
+                      stageProposal(Math.max(1, current.capacity - 2))
+                    }
+                    className="mt-3 h-8 w-full bg-[#173f31] text-[10px] text-white hover:bg-[#255944]"
+                  >
+                    <Sparkles /> Stage agent proposal
+                  </Button>
+                )}
+                {phase === 'staged' && (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Button
+                      onClick={applyProposal}
+                      className="h-8 bg-[#173f31] text-[10px] text-white"
+                    >
+                      <Check /> Approve
+                    </Button>
+                    <Button
+                      onClick={undo}
+                      variant="outline"
+                      className="h-8 text-[10px]"
+                    >
+                      <X /> Reject
+                    </Button>
+                  </div>
+                )}
+                {phase === 'applied' && (
+                  <div className="mt-3 flex items-center gap-2 rounded-lg bg-[#e7f4df] p-2 text-[10px] font-bold text-[#356f41]">
+                    <Check className="size-3.5" /> Change approved and applied
+                  </div>
+                )}
+              </div>
+              <div className="mt-5">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.13em] text-[#7a877f]">
+                  Design constraints
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['≥ 40 seats', 'Stage locked', 'Minimize moves'].map(
+                    (constraint) => (
+                      <Badge
+                        key={constraint}
+                        variant="outline"
+                        className="border-[#ccd8cc] bg-white text-[9px] text-[#516359]"
+                      >
+                        <Lock className="size-2.5" />
+                        {constraint}
+                      </Badge>
+                    ),
+                  )}
+                </div>
+              </div>
+              <output
+                aria-live="polite"
+                className="mt-5 block rounded-lg border border-[#d8e2d7] bg-white p-2.5 text-[9px] leading-relaxed text-[#5d6f63]"
+              >
+                {announcement}
+              </output>
+              <p className="mt-4 border-t border-[#dce4dc] pt-4 text-[9px] leading-relaxed text-[#87938b]">
+                Planning aid only. ClearPath does not certify compliance with
+                local building codes or replace review by a qualified
+                accessibility professional.
+              </p>
+            </aside>
+          </section>
+        </div>
+      )}
+      {showLanding && <LandingFooter />}
     </main>
   );
 }
@@ -477,17 +486,17 @@ function LandingHero() {
           <a href="#workflow" className="transition hover:text-[#112119]">
             How it works
           </a>
-          <a href="#studio" className="transition hover:text-[#112119]">
+          <Link href="/studio" className="transition hover:text-[#112119]">
             Live studio
-          </a>
+          </Link>
         </div>
-        <a
-          href="#studio"
+        <Link
+          href="/studio"
           className="group inline-flex h-10 items-center gap-2 rounded-full bg-[#102b20] px-4 text-[12px] font-[750] text-white shadow-[0_8px_22px_rgba(16,43,32,0.18)] transition hover:-translate-y-0.5 hover:bg-[#193d2e]"
         >
           Launch studio{' '}
           <ArrowUpRight className="size-3.5 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-        </a>
+        </Link>
       </nav>
 
       <div
@@ -527,13 +536,13 @@ function LandingHero() {
             becomes real.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
-            <a
-              href="#studio"
+            <Link
+              href="/studio"
               className="group inline-flex h-13 items-center gap-3 rounded-full bg-[#102b20] px-6 text-[13px] font-[750] text-white shadow-[0_14px_32px_rgba(16,43,32,0.2)] transition hover:-translate-y-0.5 hover:bg-[#193d2e]"
             >
               Explore the live studio{' '}
               <ArrowRight className="size-4 transition group-hover:translate-x-1" />
-            </a>
+            </Link>
             <a
               href="#workflow"
               className="inline-flex h-13 items-center gap-2 rounded-full border border-[#bdc9c0] bg-white/70 px-5 text-[13px] font-[700] text-[#304238] backdrop-blur transition hover:border-[#8da092] hover:bg-white"
