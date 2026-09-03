@@ -141,12 +141,15 @@ export function generateAlternatives(
   session: PlanningSession,
   actor: AuditActor,
   factory: EventFactory = browserEventFactory,
+  signal?: AbortSignal,
 ): PlanningSession {
   try {
     const alternatives = generateRouteAlternatives(
       session.committed,
       session.constraints,
       3,
+      {},
+      signal,
     ).map((proposal) => ({ ...proposal, sessionRevision: session.revision }));
     return record({ ...session, alternatives, staged: null }, factory, {
       actor,
@@ -311,7 +314,7 @@ export function rejectStagedProposal(
 
 export function undoLastChange(
   session: PlanningSession,
-  actor: 'human',
+  actor: AuditActor,
   factory: EventFactory = browserEventFactory,
 ): PlanningSession {
   const restored = session.undoStack.at(-1);

@@ -24,11 +24,11 @@ Briefly show `get_plan_geometry`. Emphasize that walls, terminal-contact semanti
 
 ## 0:55–1:15 — Add human constraints
 
-In the visible UI, lock Desk 3 and leave required capacity at 24. Then prompt:
+In the visible UI, lock Desk 8 and leave required capacity at 24. Then prompt:
 
 > Respect my current locks and all 24 seats. Generate the two best route-clearance layout alternatives.
 
-Show two different full-capacity `generate_route_alternatives` results. Point out the **Threshold satisfied** status, different change coordinates, search rationale, and trade-offs—not just differently worded copies. The top option moves Desk 3 from `(600, 130)` to `(520, 130)`, preserves 24 seats, reaches 90 cm centred clear width, clears all issues, and scores 98.
+Show two different full-capacity `generate_route_alternatives` results. Point out the **Threshold satisfied** status, different change coordinates, search rationale, and trade-offs—not just differently worded copies. The top option moves Desk 3 from `(600, 130)` to `(530, 130)` with `distanceCm: 70`, preserves 24 seats, reaches 90 cm centred clear width, clears all issues, and scores 98.
 
 ## 1:15–1:40 — Stage and compare
 

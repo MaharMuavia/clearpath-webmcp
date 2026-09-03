@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createClassroomPlan } from '@/lib/planning-engine';
+import {
+  createClassroomPlan,
+  type AuditActor,
+} from '@/lib/planning-engine';
 import {
   applyStagedProposal,
   createPlanningSession,
@@ -15,11 +18,13 @@ function actions(session: PlanningSession) {
   return {
     focusIssue: vi.fn(),
     setConstraints: vi.fn(() => session),
-    generateAlternatives: vi.fn(() => session),
+    generateAlternatives: vi.fn((_signal?: AbortSignal) => session),
     stageProposal: vi.fn(() => session),
     requestApproval: vi.fn(() => session),
-    rejectProposal: vi.fn(() => session),
-    undo: vi.fn(() => session),
+    rejectProposal: vi.fn(
+      (_proposalId: string, _actor: AuditActor) => session,
+    ),
+    undo: vi.fn((_actor: AuditActor) => session),
   };
 }
 const names = (session: PlanningSession) =>
@@ -185,5 +190,80 @@ describe('WebMCP contracts', () => {
       committed: false,
     });
     expect(toolActions.requestApproval).toHaveBeenCalledWith(staged.staged!.id);
+  });
+
+  it('records tool-driven rejection and undo as agent actions', () => {
+    const baseline = createPlanningSession(createClassroomPlan());
+    const generated = generateAlternatives(baseline, 'agent');
+    const staged = stageProposal(
+      generated,
+      generated.alternatives[0].id,
+      'agent',
+    );
+    let rejected: PlanningSession | undefined;
+    const rejectActions = actions(staged);
+    rejectActions.rejectProposal.mockImplementation((proposalId, actor) => {
+      expect(proposalId).toBe(staged.staged!.id);
+      rejected = rejectStagedProposal(staged, actor);
+      return rejected;
+    });
+    buildToolDefinitions(staged, rejectActions)
+      .find((tool) => tool.name === 'reject_staged_plan')!
+      .execute({ proposalId: staged.staged!.id });
+    expect(rejected?.history.at(-1)).toMatchObject({
+      action: 'proposal_rejected',
+      actor: 'agent',
+    });
+
+    const applied = applyStagedProposal(
+      staged,
+      staged.staged!.id,
+      'human',
+    );
+    let undone: PlanningSession | undefined;
+    const undoActions = actions(applied);
+    undoActions.undo.mockImplementation((actor) => {
+      undone = undoLastChange(applied, actor);
+      return undone;
+    });
+    buildToolDefinitions(applied, undoActions)
+      .find((tool) => tool.name === 'undo_plan_change')!
+      .execute({});
+    expect(undone?.history.at(-1)).toMatchObject({
+      action: 'plan_change_undone',
+      actor: 'agent',
+    });
+  });
+
+  it('honors a per-execution abort during search without changing session state', () => {
+    const baseline = createPlanningSession(createClassroomPlan());
+    const committed = structuredClone(baseline.committed);
+    const constraints = structuredClone(baseline.constraints);
+    let checks = 0;
+    const signal = {
+      get aborted() {
+        checks += 1;
+        return checks >= 3;
+      },
+      reason: new DOMException('Cancelled by test.', 'AbortError'),
+    } as AbortSignal;
+    const toolActions = actions(baseline);
+    toolActions.generateAlternatives.mockImplementation(
+      (executionSignal?: AbortSignal) =>
+        generateAlternatives(
+          baseline,
+          'agent',
+          undefined,
+          executionSignal,
+        ),
+    );
+    expect(() =>
+      buildToolDefinitions(baseline, toolActions)
+        .find((tool) => tool.name === 'generate_route_alternatives')!
+        .execute({}, { signal }),
+    ).toThrow('Cancelled by test.');
+    expect(checks).toBeGreaterThan(1);
+    expect(baseline.committed).toEqual(committed);
+    expect(baseline.constraints).toEqual(constraints);
   });
 });
