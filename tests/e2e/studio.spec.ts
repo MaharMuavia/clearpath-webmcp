@@ -138,7 +138,7 @@ test('impossible capacity fails safely and the human UI works without WebMCP', a
   await page.getByLabel('Required seat capacity').fill('25');
   await page.getByRole('button', { name: 'Generate alternatives' }).click();
   await expect(page.getByRole('alert')).toContainText(
-    'exceeds the current capacity',
+    'exceeds the maximum available capacity',
   );
   await expect(page.getByText('Version north-hall-v1')).toBeVisible();
 });
@@ -198,16 +198,23 @@ test('dynamic apply requests human approval and disappears after rejection', asy
     .toBe(false);
 });
 
-test('lower capacity exposes an explicit removable-seat trade-off and undo restores it', async ({
+test('lower minimum preserves capacity by default while keeping removal explicit and reversible', async ({
   page,
 }) => {
   await openStudio(page);
   await page.getByLabel('Required seat capacity').fill('22');
   await page.getByRole('button', { name: 'Generate alternatives' }).click();
   await expect(page.getByRole('button', { name: /Option 1/ })).toContainText(
-    'removed',
+    'Capacity 24',
   );
-  await page.getByRole('button', { name: /Option 1/ }).click();
+  await expect(
+    page.getByRole('button', { name: /Option 1/ }),
+  ).not.toContainText('removed');
+  const removal = page.getByRole('button', { name: /Option/ }).filter({
+    hasText: 'removed',
+  });
+  await expect(removal).toHaveCount(1);
+  await removal.click();
   await expect(
     page.getByText(/removed from usable layout, −2 seats/),
   ).toBeVisible();
@@ -218,4 +225,19 @@ test('lower capacity exposes an explicit removable-seat trade-off and undo resto
   await expect(page.getByText('22 seats')).toBeVisible();
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(page.getByText('24 seats')).toBeVisible();
+});
+
+test('required actions remain available in a narrow layout', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openStudio(page);
+  await page.getByRole('button', { name: 'Generate alternatives' }).click();
+  await page.getByRole('button', { name: /Option 1/ }).click();
+  await expect(
+    page.getByRole('button', { name: 'Approve and apply' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Reject proposal' }),
+  ).toBeVisible();
 });

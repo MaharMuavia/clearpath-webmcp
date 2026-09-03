@@ -483,6 +483,11 @@ export function ClearPathStudio() {
                   <p className="mt-2 text-[10px] text-[#718078]">
                     {proposal.changes.map(describeChange).join(' · ')}
                   </p>
+                  <p className="mt-1 text-[10px] font-semibold text-[#3f5948]">
+                    Capacity {proposal.after.metrics.capacity} · Score{' '}
+                    {proposal.after.metrics.score} · Clear width{' '}
+                    {proposal.after.metrics.minimumClearWidthCm} cm
+                  </p>
                 </button>
               ))}
             </div>

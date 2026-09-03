@@ -10,7 +10,7 @@ Visual planning surfaces hide their most important state in coordinates, topolog
 
 ## What it does
 
-ClearPath models one credible classroom in centimetres. A deterministic computational-geometry engine finds route intersections, centreline clearance, centred clear width, turning-space overlap, entrance approach conflicts, active capacity, route length, and changed objects. A bounded beam search ranks valid move/removal/restoration combinations lexicographically while enforcing locks, capacity, boundaries, and non-overlap.
+ClearPath models one credible classroom in centimetres. A deterministic computational-geometry engine finds route intersections, centreline clearance, centred clear width, destination-wall clearance, turning-space overlap, entrance approach conflicts, active capacity, route length, and changed objects. The physical presentation wall is audited on every non-terminal route segment; only a verified perpendicular terminal contact receives a one-half-corridor approach exemption. A bounded beam search ranks valid move/removal/restoration combinations lexicographically while enforcing locks, capacity, boundaries, and non-overlap. Capacity loss is ranked before disruption, so lowering the minimum does not silently request seat removal.
 
 The agent can read geometry, audit, focus an issue, set constraints, generate alternatives, stage a proposal, and compare exact versions. Staging never changes committed geometry. The dynamic apply tool only opens a visible approval gate; a human must approve the consequential change. Rejection preserves the committed plan and undo restores the exact previous geometry.
 
@@ -27,10 +27,12 @@ Tools use the current imperative `document.modelContext.registerTool()` interfac
 - Deterministic geometry and documented heuristic score.
 - Bounded ranked proposal search with hard constraints.
 - Exact committed/staged versions, stale-ID rejection, real events, and exact undo.
-- 25 unit/integration tests and 7 Chromium mock-host workflows passing.
-- CI covers type checking, lint, tests, build, and browser workflows.
+- 61 unit/contract tests and 8 Chromium mock-host workflows passing locally.
+- CI is configured for type checking, lint, tests, build, and browser workflows; CI for the final working tree is pending commit/push.
 - `npm audit` reports zero vulnerabilities after compatible upgrades.
 
 ## Scope and disclaimer
 
 The former clinic and café were removed because they did not contain independent geometry. One honest classroom scenario is stronger evidence than three scripted skins. ClearPath is a planning aid, not accessibility certification or a substitute for qualified local review.
+
+Native ChatGPT WebMCP selection and deployment of the final source revision remain pending manual verification and must be completed before these materials are submitted.

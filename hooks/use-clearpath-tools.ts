@@ -58,6 +58,8 @@ function stringField(input: unknown, field: string): string {
   const value = objectInput(input, [field])[field];
   if (typeof value !== 'string' || value.trim() === '')
     throw new Error(`${field} must be a non-empty string.`);
+  if (value.length > 256)
+    throw new Error(`${field} must contain at most 256 characters.`);
   return value;
 }
 function conciseProposal(proposal: RouteProposal) {
@@ -82,6 +84,10 @@ export function buildToolDefinitions(
 ): ToolDefinition[] {
   const plan = visiblePlan(session);
   const audit = auditPlan(plan, session.baseline);
+  const maximumCapacity = session.committed.objects.reduce(
+    (sum, object) => sum + object.capacity,
+    0,
+  );
   const tools: ToolDefinition[] = [
     {
       name: 'get_plan_summary',
@@ -101,6 +107,7 @@ export function buildToolDefinitions(
           versionId: plan.versionId,
           committedVersionId: session.committed.versionId,
           stagedProposalId: session.staged?.id ?? null,
+          viewing: session.staged ? 'staged-proposal' : 'committed-plan',
           constraints: session.constraints,
           metrics: audit.metrics,
           openIssueIds: audit.issues.map((issue) => issue.id),
@@ -112,7 +119,7 @@ export function buildToolDefinitions(
       name: 'get_plan_geometry',
       title: 'Get plan geometry',
       description:
-        'Read agent-meaningful plan dimensions, route coordinates, objects, locks, capacity contributions, and required zones.',
+        'Read exact plan dimensions, scale, walls, route coordinates, physical destination and terminal-contact model, objects, locks, capacity contributions, and required zones.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -164,7 +171,15 @@ export function buildToolDefinitions(
         'Visibly focus one currently open geometry-derived audit issue in the studio.',
       inputSchema: {
         type: 'object',
-        properties: { issueId: { type: 'string' } },
+        properties: {
+          issueId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 256,
+            description:
+              'A currently open issue ID returned by audit_access_routes.',
+          },
+        },
         required: ['issueId'],
         additionalProperties: false,
       },
@@ -191,7 +206,15 @@ export function buildToolDefinitions(
         'Set the required minimum seat capacity and invalidate proposals generated under older constraints.',
       inputSchema: {
         type: 'object',
-        properties: { minimumCapacity: { type: 'integer', minimum: 0 } },
+        properties: {
+          minimumCapacity: {
+            type: 'integer',
+            minimum: 0,
+            maximum: maximumCapacity,
+            description:
+              'Required active seat capacity; lowering it does not request removal.',
+          },
+        },
         required: ['minimumCapacity'],
         additionalProperties: false,
       },
@@ -201,6 +224,10 @@ export function buildToolDefinitions(
         if (!Number.isInteger(value) || (value as number) < 0)
           throw new Error(
             'minimumCapacity must be a non-negative whole number.',
+          );
+        if ((value as number) > maximumCapacity)
+          throw new Error(
+            `minimumCapacity cannot exceed available capacity ${maximumCapacity}.`,
           );
         const next = actions.setConstraints({
           minimumCapacity: value as number,
@@ -254,7 +281,15 @@ export function buildToolDefinitions(
           'Available after generation. Stage one current proposal as a visible ghost preview without changing committed geometry.',
         inputSchema: {
           type: 'object',
-          properties: { proposalId: { type: 'string' } },
+          properties: {
+            proposalId: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 256,
+              description:
+                'A current proposal ID returned by generate_route_alternatives.',
+            },
+          },
           required: ['proposalId'],
           additionalProperties: false,
         },
@@ -276,7 +311,14 @@ export function buildToolDefinitions(
           'Available after generation. Read exact metrics, changes, resolved and remaining issues, status, and trade-offs for a current proposal.',
         inputSchema: {
           type: 'object',
-          properties: { proposalId: { type: 'string' } },
+          properties: {
+            proposalId: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 256,
+              description: 'A current generated or staged proposal ID.',
+            },
+          },
           required: ['proposalId'],
           additionalProperties: false,
         },
@@ -302,7 +344,14 @@ export function buildToolDefinitions(
           'Available for a current staged proposal. Record an agent approval request and open the comparison; this tool never commits geometry. Only the visible human approval button can commit.',
         inputSchema: {
           type: 'object',
-          properties: { proposalId: { type: 'string' } },
+          properties: {
+            proposalId: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 256,
+              description: 'The currently staged proposal ID.',
+            },
+          },
           required: ['proposalId'],
           additionalProperties: false,
         },
@@ -333,7 +382,14 @@ export function buildToolDefinitions(
           'Available for a current staged proposal. Reject it and invalidate generated alternatives while preserving committed geometry exactly.',
         inputSchema: {
           type: 'object',
-          properties: { proposalId: { type: 'string' } },
+          properties: {
+            proposalId: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 256,
+              description: 'The currently staged proposal ID.',
+            },
+          },
           required: ['proposalId'],
           additionalProperties: false,
         },

@@ -180,8 +180,8 @@ export function createClassroomPlan(): FloorPlan {
     route: [
       entrance,
       { x: 150, y: 520 },
-      { x: 150, y: 105 },
-      { x: 710, y: 105 },
+      { x: 150, y: 247 },
+      { x: 710, y: 247 },
       destination,
     ],
     objects: [
@@ -380,7 +380,10 @@ export function planCapacity(plan: FloorPlan): number {
   );
 }
 
-function distanceFromRouteToObject(route: Point[], object: Rect): number {
+export function distanceFromRouteToObject(
+  route: Point[],
+  object: Rect,
+): number {
   let distance = Number.POSITIVE_INFINITY;
   for (let index = 1; index < route.length; index += 1)
     distance = Math.min(
@@ -389,7 +392,98 @@ function distanceFromRouteToObject(route: Point[], object: Rect): number {
     );
   return distance;
 }
-function distanceFromRouteToWalls(plan: FloorPlan): number {
+
+function pointsEqual(a: Point, b: Point): boolean {
+  return Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9;
+}
+
+function pointInRect(point: Point, rect: Rect): boolean {
+  return (
+    point.x >= rect.x &&
+    point.x <= rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y <= rect.y + rect.height
+  );
+}
+
+function pointOnRectBoundary(point: Point, rect: Rect): boolean {
+  if (!pointInRect(point, rect)) return false;
+  return (
+    Math.abs(point.x - rect.x) < 1e-9 ||
+    Math.abs(point.x - (rect.x + rect.width)) < 1e-9 ||
+    Math.abs(point.y - rect.y) < 1e-9 ||
+    Math.abs(point.y - (rect.y + rect.height)) < 1e-9
+  );
+}
+
+export function hasValidTerminalDestinationContact(
+  plan: FloorPlan,
+  destinationObject: Rect,
+): boolean {
+  if (plan.route.length < 2) return false;
+  const start = plan.route.at(-2)!;
+  const end = plan.route.at(-1)!;
+  if (
+    !pointsEqual(end, plan.destination) ||
+    !pointOnRectBoundary(end, destinationObject) ||
+    pointInRect(start, destinationObject)
+  )
+    return false;
+
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy);
+  if (length <= 1e-9) return false;
+  const justBeforeEnd = {
+    x: end.x - (dx / length) * 1e-6,
+    y: end.y - (dy / length) * 1e-6,
+  };
+  if (pointInRect(justBeforeEnd, destinationObject)) return false;
+
+  const onVerticalEdge =
+    Math.abs(end.x - destinationObject.x) < 1e-9 ||
+    Math.abs(end.x - (destinationObject.x + destinationObject.width)) < 1e-9;
+  const onHorizontalEdge =
+    Math.abs(end.y - destinationObject.y) < 1e-9 ||
+    Math.abs(end.y - (destinationObject.y + destinationObject.height)) < 1e-9;
+  return (
+    (onVerticalEdge && Math.abs(dy) < 1e-9) ||
+    (onHorizontalEdge && Math.abs(dx) < 1e-9)
+  );
+}
+
+export function distanceFromRouteToDestination(
+  plan: FloorPlan,
+  destinationObject: Rect,
+): number {
+  if (!hasValidTerminalDestinationContact(plan, destinationObject))
+    return distanceFromRouteToObject(plan.route, destinationObject);
+
+  let distance = Number.POSITIVE_INFINITY;
+  for (let index = 1; index < plan.route.length - 1; index += 1)
+    distance = Math.min(
+      distance,
+      segmentRectDistance(
+        plan.route[index - 1],
+        plan.route[index],
+        destinationObject,
+      ),
+    );
+
+  const start = plan.route.at(-2)!;
+  const end = plan.route.at(-1)!;
+  const length = Math.hypot(end.x - start.x, end.y - start.y);
+  const auditedLength = Math.max(0, length - THRESHOLDS.routeHalfWidthCm);
+  const auditedEnd = {
+    x: start.x + ((end.x - start.x) / length) * auditedLength,
+    y: start.y + ((end.y - start.y) / length) * auditedLength,
+  };
+  return Math.min(
+    distance,
+    segmentRectDistance(start, auditedEnd, destinationObject),
+  );
+}
+export function distanceFromRouteToWalls(plan: FloorPlan): number {
   let distance = Number.POSITIVE_INFINITY;
   for (let routeIndex = 1; routeIndex < plan.route.length; routeIndex += 1) {
     for (const wall of plan.walls)
@@ -408,12 +502,13 @@ function distanceFromRouteToWalls(plan: FloorPlan): number {
 
 export function auditPlan(plan: FloorPlan, baseline?: FloorPlan): AuditResult {
   const issues: AuditIssue[] = [];
-  const activeObstacles = plan.objects.filter(
-    (object) => object.active && object.kind !== 'destination',
-  );
+  const activeObstacles = plan.objects.filter((object) => object.active);
   const objectClearances = activeObstacles.map((object) => ({
     object,
-    centerlineClearanceCm: distanceFromRouteToObject(plan.route, object),
+    centerlineClearanceCm:
+      object.kind === 'destination'
+        ? distanceFromRouteToDestination(plan, object)
+        : distanceFromRouteToObject(plan.route, object),
   }));
   for (const { object, centerlineClearanceCm } of objectClearances) {
     const clearWidthCm = Math.round(centerlineClearanceCm * 2);
@@ -505,7 +600,7 @@ export function auditPlan(plan: FloorPlan, baseline?: FloorPlan): AuditResult {
       Math.round(
         100 -
           criticalIssues * 22 -
-          reviewIssues * 7 -
+          reviewIssues * 10 -
           Math.max(0, THRESHOLDS.requiredClearWidthCm - minimumClearWidthCm) *
             0.25 -
           changedObjects * 2 -
@@ -547,13 +642,154 @@ const withinBounds = (object: PlanObject, plan: FloorPlan): boolean =>
     object.y >= 20 &&
     object.x + object.width <= plan.width - 20 &&
     object.y + object.height <= plan.height - 20);
-export function isValidPlan(plan: FloorPlan): boolean {
-  const active = plan.objects.filter((object) => object.active);
-  return active.every(
-    (object, index) =>
-      withinBounds(object, plan) &&
-      active.slice(index + 1).every((other) => !rectsOverlap(object, other)),
+export type PlanValidationResult = { valid: boolean; errors: string[] };
+
+function isFinitePoint(point: Point): boolean {
+  return Number.isFinite(point.x) && Number.isFinite(point.y);
+}
+
+function pointWithinPlan(point: Point, plan: FloorPlan): boolean {
+  return (
+    point.x >= 0 &&
+    point.y >= 0 &&
+    point.x <= plan.width &&
+    point.y <= plan.height
   );
+}
+
+function duplicateIds(items: Array<{ id: string }>): string[] {
+  const seen = new Set<string>();
+  return items
+    .map((item) => item.id)
+    .filter((id) => (seen.has(id) ? true : (seen.add(id), false)));
+}
+
+export function validatePlan(
+  plan: FloorPlan,
+  lockedReference?: FloorPlan,
+): PlanValidationResult {
+  const errors: string[] = [];
+  if (!Number.isFinite(plan.width) || plan.width <= 0)
+    errors.push('Plan width must be a positive finite number.');
+  if (!Number.isFinite(plan.height) || plan.height <= 0)
+    errors.push('Plan height must be a positive finite number.');
+  if (!Number.isFinite(plan.pixelsPerCm) || plan.pixelsPerCm <= 0)
+    errors.push('Plan geometry scale must be a positive finite number.');
+  if (plan.route.length < 2)
+    errors.push('Route must contain at least two points.');
+  for (const [index, point] of plan.route.entries())
+    if (!isFinitePoint(point) || !pointWithinPlan(point, plan))
+      errors.push(
+        `Route point ${index} must be finite and inside plan bounds.`,
+      );
+  if (!isFinitePoint(plan.entrance) || !pointWithinPlan(plan.entrance, plan))
+    errors.push('Entrance must be finite and inside plan bounds.');
+  if (
+    !isFinitePoint(plan.destination) ||
+    !pointWithinPlan(plan.destination, plan)
+  )
+    errors.push('Destination must be finite and inside plan bounds.');
+  if (plan.route.length && !pointsEqual(plan.route[0], plan.entrance))
+    errors.push('Route start must equal the declared entrance.');
+  if (plan.route.length && !pointsEqual(plan.route.at(-1)!, plan.destination))
+    errors.push('Route end must equal the declared destination.');
+
+  const terminalDestinations = plan.objects.filter(
+    (object) => object.active && object.kind === 'destination',
+  );
+  if (terminalDestinations.length !== 1)
+    errors.push('Plan must contain exactly one active physical destination.');
+  else if (!hasValidTerminalDestinationContact(plan, terminalDestinations[0]))
+    errors.push(
+      'Route must make perpendicular terminal contact with the physical destination boundary.',
+    );
+
+  for (const duplicate of duplicateIds(plan.objects))
+    errors.push(`Duplicate object ID: ${duplicate}.`);
+  for (const duplicate of duplicateIds([
+    ...plan.turningZones,
+    ...plan.doorZones,
+  ]))
+    errors.push(`Duplicate zone ID: ${duplicate}.`);
+
+  for (const object of plan.objects) {
+    if (!isFinitePoint(object))
+      errors.push(`${object.id} coordinates must be finite.`);
+    if (
+      !Number.isFinite(object.width) ||
+      object.width <= 0 ||
+      !Number.isFinite(object.height) ||
+      object.height <= 0
+    )
+      errors.push(`${object.id} dimensions must be positive and finite.`);
+    if (!Number.isFinite(object.rotation))
+      errors.push(`${object.id} rotation must be finite.`);
+    if (!Number.isInteger(object.capacity) || object.capacity < 0)
+      errors.push(`${object.id} capacity must be a non-negative integer.`);
+    if (!withinBounds(object, plan))
+      errors.push(`${object.id} must remain inside the usable plan boundary.`);
+    const reference = lockedReference?.objects.find(
+      (candidate) => candidate.id === object.id,
+    );
+    if (
+      reference?.locked &&
+      JSON.stringify(object) !== JSON.stringify(reference)
+    )
+      errors.push(`${object.id} is locked and must remain unchanged.`);
+  }
+
+  const active = plan.objects.filter((object) => object.active);
+  for (let index = 0; index < active.length; index += 1)
+    for (const other of active.slice(index + 1))
+      if (rectsOverlap(active[index], other))
+        errors.push(`${active[index].id} overlaps ${other.id}.`);
+
+  for (const wall of plan.walls)
+    if (
+      !isFinitePoint(wall.start) ||
+      !isFinitePoint(wall.end) ||
+      !pointWithinPlan(wall.start, plan) ||
+      !pointWithinPlan(wall.end, plan)
+    )
+      errors.push(
+        `${wall.id} endpoints must be finite and inside plan bounds.`,
+      );
+    else if (pointsEqual(wall.start, wall.end))
+      errors.push(`${wall.id} must have two distinct endpoints.`);
+  for (const zone of plan.doorZones)
+    if (
+      !isFinitePoint(zone) ||
+      !Number.isFinite(zone.width) ||
+      zone.width <= 0 ||
+      !Number.isFinite(zone.height) ||
+      zone.height <= 0 ||
+      zone.x < 20 ||
+      zone.y < 20 ||
+      zone.x + zone.width > plan.width - 20 ||
+      zone.y + zone.height > plan.height - 20
+    )
+      errors.push(
+        `${zone.id} must be positive, finite, and inside usable bounds.`,
+      );
+  for (const zone of plan.turningZones)
+    if (
+      !isFinitePoint(zone.center) ||
+      !Number.isFinite(zone.radius) ||
+      zone.radius <= 0 ||
+      zone.center.x - zone.radius < 20 ||
+      zone.center.y - zone.radius < 20 ||
+      zone.center.x + zone.radius > plan.width - 20 ||
+      zone.center.y + zone.radius > plan.height - 20
+    )
+      errors.push(
+        `${zone.id} must have a positive radius and remain inside usable bounds.`,
+      );
+
+  return { valid: errors.length === 0, errors };
+}
+
+export function isValidPlan(plan: FloorPlan): boolean {
+  return validatePlan(plan).valid;
 }
 function metricDeltas(before: PlanMetrics, after: PlanMetrics): MetricDeltas {
   return Object.fromEntries(
@@ -569,9 +805,17 @@ function stablePlanContext(
   constraints: PlanningConstraints,
 ): string {
   return JSON.stringify({
+    planId: plan.id,
     versionId: plan.versionId,
+    width: plan.width,
+    height: plan.height,
+    unit: plan.unit,
+    pixelsPerCm: plan.pixelsPerCm,
     constraints,
     thresholds: THRESHOLDS,
+    walls: [...plan.walls].sort((a, b) => a.id.localeCompare(b.id)),
+    entrance: plan.entrance,
+    destination: plan.destination,
     route: plan.route,
     objects: [...plan.objects]
       .sort((a, b) => a.id.localeCompare(b.id))
@@ -588,6 +832,10 @@ function stablePlanContext(
           capacity,
         }),
       ),
+    turningZones: [...plan.turningZones].sort((a, b) =>
+      a.id.localeCompare(b.id),
+    ),
+    doorZones: [...plan.doorZones].sort((a, b) => a.id.localeCompare(b.id)),
   });
 }
 export function proposalContextFingerprint(
@@ -617,6 +865,8 @@ type SearchRank = [
   number,
   number,
   number,
+  number,
+  number,
 ];
 function searchRank(
   state: SearchState,
@@ -636,6 +886,22 @@ function searchRank(
     (sum, change) => sum + (change.type === 'remove' ? 0 : change.distanceCm),
     0,
   );
+  const baselineCapacity =
+    planCapacity(state.plan) +
+    state.changes.reduce(
+      (loss, change) =>
+        loss +
+        (change.type === 'remove'
+          ? change.previousCapacity
+          : change.type === 'restore'
+            ? -change.restoredCapacity
+            : 0),
+      0,
+    );
+  const capacityLoss = Math.max(
+    0,
+    baselineCapacity - state.audit.metrics.capacity,
+  );
   return [
     routeBlocking,
     clearanceDeficit === 0 ? 0 : 1,
@@ -643,8 +909,10 @@ function searchRank(
     otherCritical,
     state.audit.metrics.reviewIssues,
     state.audit.metrics.capacity >= constraints.minimumCapacity ? 0 : 1,
+    capacityLoss,
     state.changes.length,
-    distance + state.audit.metrics.routeLengthCm / 100_000,
+    distance,
+    state.audit.metrics.routeLengthCm,
   ];
 }
 function compareRanks(a: SearchRank, b: SearchRank): number {
@@ -678,14 +946,16 @@ function candidateChanges(
   allowRemoval: boolean,
 ): PlanChange[] {
   const offsets = [
+    [-80, 0],
+    [160, 0],
+    [-100, 0],
     [0, 80],
     [0, 100],
     [0, 120],
-    [-80, 0],
     [80, 0],
     [-80, 80],
-    [80, 80],
     [-120, 0],
+    [80, 80],
     [120, 0],
   ] as const;
   if (!object.active)
@@ -732,7 +1002,7 @@ function applyChange(plan: FloorPlan, change: PlanChange): FloorPlan | null {
     object.x = change.to.x;
     object.y = change.to.y;
   }
-  return isValidPlan(next) ? next : null;
+  return validatePlan(next, plan).valid ? next : null;
 }
 function proposalStatus(
   audit: AuditResult,
@@ -762,11 +1032,12 @@ export function generateRouteAlternatives(
   );
   if (constraints.minimumCapacity > maximumAvailableCapacity)
     throw new Error(
-      `Minimum capacity ${constraints.minimumCapacity} exceeds the current capacity of ${maximumAvailableCapacity}.`,
+      `Minimum capacity ${constraints.minimumCapacity} exceeds the maximum available capacity of ${maximumAvailableCapacity}.`,
     );
-  if (!isValidPlan(plan))
+  const validation = validatePlan(plan);
+  if (!validation.valid)
     throw new Error(
-      'Proposal generation requires a physically valid baseline plan.',
+      `Proposal generation requires a structurally valid baseline plan: ${validation.errors.join(' ')}`,
     );
   const limits = { ...DEFAULT_SEARCH_LIMITS, ...searchLimits };
   const before = auditPlan(plan, plan);
@@ -900,7 +1171,7 @@ export function generateRouteAlternatives(
       ],
       explanation:
         status === 'threshold-satisfied'
-          ? `Bounded beam search found a threshold-satisfied plan after ${state.changes.length} coordinated change(s). Ranking prioritizes route blockers, required clear width, other critical issues, review issues, capacity, disruption, and distance in that order.`
+          ? `Bounded beam search found a threshold-satisfied plan after ${state.changes.length} coordinated change(s). Ranking prioritizes route blockers, required clear width, other critical issues, review issues, minimum-capacity feasibility, capacity preservation, disruption, movement distance, and route length in that order.`
           : `Bounded beam search found a partial improvement after ${state.changes.length} coordinated change(s). The remaining issues are reported and this proposal is not described as cleared.`,
       tradeoffs: [
         ...(capacityLoss > 0
@@ -920,12 +1191,29 @@ export function generateRouteAlternatives(
 }
 
 export function exactGeometry(plan: FloorPlan) {
+  const terminalObject = plan.objects.find(
+    (object) => object.active && object.kind === 'destination',
+  );
   return {
     planId: plan.id,
     versionId: plan.versionId,
-    dimensions: { width: plan.width, height: plan.height, unit: plan.unit },
+    dimensions: {
+      width: plan.width,
+      height: plan.height,
+      unit: plan.unit,
+      pixelsPerCm: plan.pixelsPerCm,
+    },
+    walls: plan.walls,
     entrance: plan.entrance,
     destination: plan.destination,
+    terminalApproach: {
+      destinationObjectId: terminalObject?.id ?? null,
+      validPerpendicularContact: terminalObject
+        ? hasValidTerminalDestinationContact(plan, terminalObject)
+        : false,
+      exemptedFinalApproachCm: terminalObject ? THRESHOLDS.routeHalfWidthCm : 0,
+      rule: 'Physical destination geometry is audited on every non-terminal segment; only one corridor half-width of a valid perpendicular final contact is exempted.',
+    },
     route: plan.route,
     objects: plan.objects.map(
       ({

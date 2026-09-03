@@ -4,7 +4,9 @@
 
 **ClearPath is a WebMCP-native accessibility planning studio that audits real floor-plan geometry, searches constraint-safe layout alternatives, and keeps every change human-approved and undoable.**
 
-[Open the live application](https://clearpath-access.hanzlakhan2266.chatgpt.site) · [Launch the studio](https://clearpath-access.hanzlakhan2266.chatgpt.site/studio)
+[Open the deployed application](https://clearpath-access.hanzlakhan2266.chatgpt.site) · [Launch the deployed studio](https://clearpath-access.hanzlakhan2266.chatgpt.site/studio)
+
+The deployment URL is provided for evaluation, but it must be redeployed and verified against the final source revision before submission.
 
 ![Current ClearPath geometry studio](public/studio.png)
 
@@ -44,50 +46,53 @@ Typed classroom geometry
 
 ## Real geometry and scoring
 
-The model uses centimetres and includes plan bounds, walls, route points, objects, rotations, locks, capacity contributions, a 150 cm turning zone, and an entrance approach/recovery zone.
+The model uses centimetres and includes plan bounds, walls, route points, objects, rotations, locks, capacity contributions, a 150 cm turning zone, and an entrance approach/recovery zone. The presentation wall remains physical obstacle geometry. The route approaches its declared target perpendicularly; every non-terminal segment is audited against the wall, and only the final 45 cm (one corridor half-width) of a verified terminal contact is exempt. A parallel, penetrating, misplaced, or non-terminal segment receives no exemption.
 
 The audit calculates segment/rectangle intersection, centreline-to-obstacle distance, centred available clear width, wall clearance, circle/rectangle overlap, rectangle overlap, route length, active capacity, and changed-object count. Every visible metric is recalculated from the visible plan. It reports every object intruding into the required corridor, even when the object does not intersect the route centreline.
 
 The explainable planning heuristic starts at 100 and subtracts:
 
 - 22 per critical conflict;
-- 7 per review conflict;
+- 10 per review conflict;
 - 0.25 per centimetre below the configured 90 cm clear-width planning threshold;
 - 2 per moved object; and
 - 4 per lost seat relative to baseline.
 
 Scores are clamped to 0–100. This is a planning heuristic, not legal certification. Requirements vary by jurisdiction.
 
-Proposal generation uses a deterministic beam search over geometry-implicated movable objects, bounded candidate positions, explicit desk-removal and restoration candidates, incremental validation, duplicate-state elimination, a maximum depth of four changes, a beam width of 72, and a 1,500-state evaluation cap. It ranks lexicographically: route blockers, required clear width, other critical conflicts, review issues, required capacity, changed-object count, movement distance, then route length. A proposal is labelled **Threshold satisfied** only when it has zero critical issues, reaches the 90 cm planning threshold, and preserves the configured capacity; all other useful results are labelled **Partial improvement**.
+Proposal generation uses a deterministic beam search over geometry-implicated movable objects, bounded candidate positions, explicit desk-removal and restoration candidates, incremental validation, duplicate-state elimination, a maximum depth of four changes, a beam width of 72, and a 1,500-state evaluation cap. It ranks lexicographically: route blockers, whether required clear width is met, clear-width deficit, other critical conflicts, review issues, minimum-capacity feasibility, capacity loss from the committed baseline, changed-object count, movement distance, then route length. Lowering the minimum to 22 permits a removal alternative but does not request one: the comparable 24-seat solution remains first. A proposal is labelled **Threshold satisfied** only when it has zero critical issues, reaches the 90 cm planning threshold, and preserves the configured minimum capacity; all other useful results are labelled **Partial improvement**.
+
+For the checked fixture, the committed baseline reports one critical Desk 3 corridor intrusion, 10 cm centreline clearance, 20 cm centred clear width, 24 seats, score 61, and a 1,048 cm route. The top full-capacity proposal moves Desk 3 from `(600, 130)` to `(520, 130)`, reaches 45/90 cm centreline/centred clearance, has no open issues, preserves 24 seats, and scores 98. These values are derived by the engine and asserted independently in tests.
 
 ## WebMCP tools
 
 Tools register only on `/studio`. Generation-dependent, staged-plan, and undo tools register only while their corresponding state exists. `apply_staged_plan` records an agent approval request and opens the human approval gate; it never commits geometry.
 
-| Tool | Mode | Purpose |
-| --- | --- | --- |
-| `get_plan_summary` | Read | Current versions, constraints, calculated metrics, and issue IDs |
-| `get_plan_geometry` | Read | Dimensions, route, objects, locks, capacity, and required zones |
-| `audit_access_routes` | Read | Recalculate and filter geometry-derived issues |
-| `focus_audit_issue` | UI action | Focus an open issue on the canvas |
-| `set_planning_constraints` | Mutate | Set minimum capacity and invalidate stale proposals |
-| `generate_route_alternatives` | Mutate | Run bounded deterministic search |
-| `stage_route_proposal` | Mutate | Stage a proposal without changing committed geometry |
-| `compare_plan_versions` | Read | Before/after metrics, status, exact move/removal/restoration changes, issues, and trade-offs |
-| `apply_staged_plan` | Approval request | Open the visible human approval gate; never commits silently |
-| `reject_staged_plan` | Mutate | Reject the staged proposal exactly |
-| `undo_plan_change` | Mutate | Restore the prior committed geometry |
-| `get_audit_history` | Read | Return real chronological event records |
+| Tool                          | Mode             | Purpose                                                                                               |
+| ----------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `get_plan_summary`            | Read             | Current versions, constraints, calculated metrics, and issue IDs                                      |
+| `get_plan_geometry`           | Read             | Dimensions, scale, walls, route, terminal-contact model, objects, locks, capacity, and required zones |
+| `audit_access_routes`         | Read             | Recalculate and filter geometry-derived issues                                                        |
+| `focus_audit_issue`           | UI action        | Focus an open issue on the canvas                                                                     |
+| `set_planning_constraints`    | Mutate           | Set minimum capacity and invalidate stale proposals                                                   |
+| `generate_route_alternatives` | Mutate           | Run bounded deterministic search                                                                      |
+| `stage_route_proposal`        | Mutate           | Stage a proposal without changing committed geometry                                                  |
+| `compare_plan_versions`       | Read             | Before/after metrics, status, exact move/removal/restoration changes, issues, and trade-offs          |
+| `apply_staged_plan`           | Approval request | Open the visible human approval gate; never commits silently                                          |
+| `reject_staged_plan`          | Mutate           | Reject the staged proposal exactly                                                                    |
+| `undo_plan_change`            | Mutate           | Restore the prior committed geometry                                                                  |
+| `get_audit_history`           | Read             | Return real chronological event records                                                               |
 
-All schemas use `additionalProperties: false`; inputs are validated again inside `execute`; registrations are cleaned up with `AbortSignal`; read-only annotations reflect actual behavior.
+All schemas use `additionalProperties: false`; identifiers and values are bounded and validated again inside `execute`; registrations are cleaned up with `AbortSignal`; read-only annotations reflect actual behavior. The implementation follows the current [WebMCP Community Group draft](https://webmachinelearning.github.io/webmcp/) and [Chrome imperative API guidance](https://developer.chrome.com/docs/ai/webmcp/imperative-api); WebMCP remains a draft API.
 
 ## Safety model
 
 - Locked objects never move.
 - Capacity, boundaries, and object overlap are hard constraints.
 - Failed searches do not mutate current state.
-- Proposal IDs are bound to a deterministic fingerprint of geometry, version, locks, capacity constraint, and thresholds; stale/rejected IDs cannot stage or apply.
+- Proposal IDs are bound to a deterministic fingerprint of plan identity/version, dimensions, unit/scale, walls, entrance, destination, ordered route, object geometry/rotation/activity/locks/capacity, required zones, constraints, and thresholds; stale/rejected IDs cannot stage or apply.
 - Agent apply calls only request visible human approval.
+- The commit function also enforces the human actor and revalidates staged geometry at runtime.
 - Apply stores the exact prior plan; undo restores it rather than reconstructing it.
 - Real audit events record actor, action, plan/proposal IDs, versions, result, and timestamp.
 
@@ -118,6 +123,8 @@ npm audit --audit-level=high
 ```
 
 CI runs type checking, lint, unit/integration tests, build, and Chromium end-to-end tests on pushes and pull requests.
+
+Current local evidence: 61 Vitest unit/contract tests and 8 Chromium mock-host workflows pass. Native ChatGPT tool selection, the deployed revision, and CI for the final uncommitted working tree remain pending manual verification.
 
 ## Limitations
 

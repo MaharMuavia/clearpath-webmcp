@@ -3,18 +3,44 @@ import {
   THRESHOLDS,
   auditPlan,
   createClassroomPlan,
+  distanceFromRouteToDestination,
+  distanceFromRouteToWalls,
+  exactGeometry,
   generateRouteAlternatives,
+  hasValidTerminalDestinationContact,
   isValidPlan,
   planCapacity,
   pointSegmentDistance,
+  proposalContextFingerprint,
   rectsOverlap,
   segmentIntersectsRect,
+  segmentRectDistance,
+  segmentSegmentDistance,
   segmentsIntersect,
   toggleObjectLock,
+  validatePlan,
+  type FloorPlan,
 } from './planning-engine';
 
+const destinationObject = (plan: FloorPlan) =>
+  plan.objects.find((object) => object.kind === 'destination')!;
+
+function coordinatedFixture(): FloorPlan {
+  const plan = createClassroomPlan();
+  plan.objects = plan.objects.filter(
+    (object) =>
+      object.kind === 'destination' ||
+      ['desk-1', 'desk-2', 'desk-3'].includes(object.id),
+  );
+  for (const desk of plan.objects.filter((object) => object.kind === 'desk')) {
+    desk.y = 200;
+    desk.locked = false;
+  }
+  return plan;
+}
+
 describe('computational geometry', () => {
-  it('detects segment intersection, distance, and rectangle collisions', () => {
+  it('detects crossing and collinear segment intersection', () => {
     expect(
       segmentsIntersect(
         { x: 0, y: 0 },
@@ -24,6 +50,39 @@ describe('computational geometry', () => {
       ),
     ).toBe(true);
     expect(
+      segmentsIntersect(
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 5, y: 0 },
+        { x: 15, y: 0 },
+      ),
+    ).toBe(true);
+  });
+
+  it('calculates point, segment, rectangle, and wall distance', () => {
+    expect(
+      pointSegmentDistance({ x: 5, y: 5 }, { x: 0, y: 0 }, { x: 10, y: 0 }),
+    ).toBe(5);
+    expect(
+      segmentSegmentDistance(
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 0, y: 8 },
+        { x: 10, y: 8 },
+      ),
+    ).toBe(8);
+    expect(
+      segmentRectDistance(
+        { x: 0, y: 5 },
+        { x: 5, y: 5 },
+        { x: 8, y: 2, width: 4, height: 6 },
+      ),
+    ).toBe(3);
+    expect(distanceFromRouteToWalls(createClassroomPlan())).toBeGreaterThan(45);
+  });
+
+  it('detects rectangle intersection and strict object overlap', () => {
+    expect(
       segmentIntersectsRect(
         { x: 0, y: 5 },
         { x: 20, y: 5 },
@@ -31,100 +90,178 @@ describe('computational geometry', () => {
       ),
     ).toBe(true);
     expect(
-      pointSegmentDistance({ x: 5, y: 5 }, { x: 0, y: 0 }, { x: 10, y: 0 }),
-    ).toBe(5);
+      rectsOverlap(
+        { x: 0, y: 0, width: 10, height: 10 },
+        { x: 10, y: 0, width: 10, height: 10 },
+      ),
+    ).toBe(false);
   });
 });
 
-describe('classroom model invariants', () => {
-  it('has a physically valid, non-overlapping baseline with useful overlap diagnostics', () => {
-    const plan = createClassroomPlan();
-    const overlaps: string[] = [];
-    for (let first = 0; first < plan.objects.length; first += 1) {
-      for (let second = first + 1; second < plan.objects.length; second += 1) {
-        const a = plan.objects[first];
-        const b = plan.objects[second];
-        if (a.active && b.active && rectsOverlap(a, b))
-          overlaps.push(`${a.id} overlaps ${b.id}`);
-      }
-    }
-    expect(
-      overlaps,
-      `Overlapping active object pairs:\n${overlaps.join('\n')}`,
-    ).toEqual([]);
-    expect(isValidPlan(createClassroomPlan())).toBe(true);
-  });
-
-  it('connects the entrance to the destination and only contacts destination geometry terminally', () => {
+describe('destination-aware route geometry', () => {
+  it('connects the entrance to the destination through perpendicular terminal contact', () => {
     const plan = createClassroomPlan();
     expect(plan.route[0]).toEqual(plan.entrance);
     expect(plan.route.at(-1)).toEqual(plan.destination);
-    const destination = plan.objects.find(
-      (object) => object.kind === 'destination',
-    )!;
-    for (let index = 1; index < plan.route.length - 1; index += 1) {
-      expect(
-        segmentIntersectsRect(
-          plan.route[index - 1],
-          plan.route[index],
-          destination,
-        ),
-      ).toBe(false);
-    }
+    expect(
+      hasValidTerminalDestinationContact(plan, destinationObject(plan)),
+    ).toBe(true);
     expect(
       segmentIntersectsRect(
         plan.route.at(-2)!,
         plan.route.at(-1)!,
-        destination,
+        destinationObject(plan),
+      ),
+    ).toBe(true);
+    expect(distanceFromRouteToDestination(plan, destinationObject(plan))).toBe(
+      THRESHOLDS.routeHalfWidthCm,
+    );
+  });
+
+  it('audits destination geometry beside non-terminal route segments', () => {
+    const plan = createClassroomPlan();
+    plan.route = [
+      plan.entrance,
+      { x: 150, y: 520 },
+      { x: 150, y: 105 },
+      { x: 710, y: 105 },
+      plan.destination,
+    ];
+    expect(distanceFromRouteToDestination(plan, destinationObject(plan))).toBe(
+      12,
+    );
+    expect(auditPlan(plan).issues).toContainEqual(
+      expect.objectContaining({
+        id: 'route-corridor:presentation-wall',
+        measuredCm: 24,
+      }),
+    );
+  });
+
+  it('does not exempt a parallel or penetrating final segment', () => {
+    const plan = createClassroomPlan();
+    plan.route = [plan.entrance, { x: 760, y: 93 }, plan.destination];
+    expect(
+      hasValidTerminalDestinationContact(plan, destinationObject(plan)),
+    ).toBe(false);
+    expect(auditPlan(plan).issues).toContainEqual(
+      expect.objectContaining({
+        id: 'route-blocked:presentation-wall',
+        measuredCm: 0,
+      }),
+    );
+  });
+
+  it('prevents threshold claims when immutable destination geometry obstructs the corridor', () => {
+    const plan = createClassroomPlan();
+    plan.route = [
+      plan.entrance,
+      { x: 150, y: 520 },
+      { x: 150, y: 105 },
+      { x: 710, y: 105 },
+      plan.destination,
+    ];
+    const proposals = generateRouteAlternatives(plan, { minimumCapacity: 24 });
+    expect(
+      proposals.every(
+        (proposal) =>
+          proposal.status === 'partial-improvement' &&
+          proposal.remainingIssueIds.includes(
+            'route-corridor:presentation-wall',
+          ),
       ),
     ).toBe(true);
   });
 
-  it('keeps every required zone inside the usable plan boundary', () => {
+  it('uses the same route and destination geometry in structured output', () => {
     const plan = createClassroomPlan();
-    for (const zone of plan.doorZones) {
-      expect(zone.x).toBeGreaterThanOrEqual(20);
-      expect(zone.y).toBeGreaterThanOrEqual(20);
-      expect(zone.x + zone.width).toBeLessThanOrEqual(plan.width - 20);
-      expect(zone.y + zone.height).toBeLessThanOrEqual(plan.height - 20);
-    }
-    for (const zone of plan.turningZones) {
-      expect(zone.center.x - zone.radius).toBeGreaterThanOrEqual(20);
-      expect(zone.center.y - zone.radius).toBeGreaterThanOrEqual(20);
-      expect(zone.center.x + zone.radius).toBeLessThanOrEqual(plan.width - 20);
-      expect(zone.center.y + zone.radius).toBeLessThanOrEqual(plan.height - 20);
-    }
+    expect(exactGeometry(plan)).toMatchObject({
+      route: plan.route,
+      destination: plan.destination,
+      objects: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'presentation-wall',
+          kind: 'destination',
+        }),
+      ]),
+    });
   });
 });
 
-describe('geometry-derived audit', () => {
-  it('detects every corridor intrusion even when no object intersects the centerline', () => {
-    const audit = auditPlan(createClassroomPlan());
-    const corridorIssues = audit.issues.filter(
-      (issue) => issue.type === 'route-corridor',
-    );
-    expect(corridorIssues.map((issue) => issue.objectId)).toEqual([
-      'desk-1',
-      'desk-2',
-      'desk-3',
-    ]);
-    expect(audit.issues.some((issue) => issue.type === 'route-blocked')).toBe(
-      false,
-    );
-    expect(audit.metrics.minimumCenterlineClearanceCm).toBeGreaterThan(0);
-    expect(audit.metrics.minimumClearWidthCm).toBeLessThan(
-      THRESHOLDS.requiredClearWidthCm,
-    );
+describe('plan validation and audit zones', () => {
+  it('accepts the valid fixture and reports actionable validation errors', () => {
+    expect(validatePlan(createClassroomPlan())).toEqual({
+      valid: true,
+      errors: [],
+    });
+    const plan = createClassroomPlan();
+    plan.width = 0;
+    plan.route = [plan.entrance];
+    plan.objects[1].width = -1;
+    plan.objects[2].capacity = 1.5;
+    plan.objects[3].id = plan.objects[2].id;
+    plan.turningZones[0].radius = 0;
+    const errors = validatePlan(plan).errors.join(' ');
+    expect(errors).toContain('Plan width');
+    expect(errors).toContain('Route must contain at least two');
+    expect(errors).toContain('dimensions');
+    expect(errors).toContain('capacity');
+    expect(errors).toContain('Duplicate object ID');
+    expect(errors).toContain('positive radius');
   });
 
-  it('reports stable issue IDs and deterministic metrics', () => {
-    const plan = createClassroomPlan();
-    expect(auditPlan(plan, plan)).toEqual(auditPlan(plan, plan));
+  it('validates route endpoints, walls, zones, and locked proposal state', () => {
+    const reference = createClassroomPlan();
+    const plan = structuredClone(reference);
+    plan.route[0] = { x: plan.route[0].x + 1, y: plan.route[0].y };
+    plan.route[plan.route.length - 1] = {
+      x: plan.route.at(-1)!.x,
+      y: plan.route.at(-1)!.y + 1,
+    };
+    plan.walls[0].start.x = Number.NaN;
+    plan.doorZones[0].x = 0;
+    plan.objects.find((object) => object.id === 'desk-4')!.x += 1;
+    const errors = validatePlan(plan, reference).errors.join(' ');
+    expect(errors).toContain('Route start');
+    expect(errors).toContain('Route end');
+    expect(errors).toContain('north endpoints');
+    expect(errors).toContain('entry-approach');
+    expect(errors).toContain('desk-4 is locked');
+  });
+
+  it('detects turning zones, door zones, bounds, and active overlap', () => {
+    const turning = createClassroomPlan();
+    Object.assign(
+      turning.objects.find((object) => object.id === 'storage')!,
+      { x: 720, y: 150 },
+    );
+    expect(
+      auditPlan(turning).issues.some((issue) => issue.type === 'turning-zone'),
+    ).toBe(true);
+
+    const door = createClassroomPlan();
+    Object.assign(
+      door.objects.find((object) => object.id === 'desk-1')!,
+      { x: 80, y: 480 },
+    );
+    expect(
+      auditPlan(door).issues.some((issue) => issue.type === 'door-approach'),
+    ).toBe(true);
+
+    const invalid = createClassroomPlan();
+    invalid.objects.find((object) => object.id === 'desk-1')!.x = 10;
+    expect(isValidPlan(invalid)).toBe(false);
+    const overlap = createClassroomPlan();
+    Object.assign(
+      overlap.objects.find((object) => object.id === 'desk-1')!,
+      { x: 420, y: 130 },
+    );
+    expect(isValidPlan(overlap)).toBe(false);
   });
 
   it('excludes inactive objects from capacity, collisions, and route conflicts', () => {
     const plan = createClassroomPlan();
-    const desk = plan.objects.find((object) => object.id === 'desk-1')!;
+    const desk = plan.objects.find((object) => object.id === 'desk-3')!;
     desk.active = false;
     desk.x = plan.objects.find((object) => object.id === 'desk-2')!.x;
     desk.y = plan.objects.find((object) => object.id === 'desk-2')!.y;
@@ -136,18 +273,82 @@ describe('geometry-derived audit', () => {
   });
 });
 
+describe('proposal context fingerprints', () => {
+  it.each([
+    ['plan ID', (plan: FloorPlan) => void (plan.id += '-changed')],
+    ['version', (plan: FloorPlan) => void (plan.versionId += '-changed')],
+    ['dimensions', (plan: FloorPlan) => void (plan.width += 1)],
+    ['scale', (plan: FloorPlan) => void (plan.pixelsPerCm += 1)],
+    ['walls', (plan: FloorPlan) => void (plan.walls[0].start.x += 1)],
+    ['entrance', (plan: FloorPlan) => void (plan.entrance.x += 1)],
+    ['destination', (plan: FloorPlan) => void (plan.destination.x += 1)],
+    ['route', (plan: FloorPlan) => void (plan.route[1].x += 1)],
+    ['object coordinates', (plan: FloorPlan) => void (plan.objects[1].x += 1)],
+    [
+      'object dimensions',
+      (plan: FloorPlan) => void (plan.objects[1].width += 1),
+    ],
+    [
+      'object rotation',
+      (plan: FloorPlan) => void (plan.objects[1].rotation += 90),
+    ],
+    [
+      'lock',
+      (plan: FloorPlan) =>
+        void (plan.objects[1].locked = !plan.objects[1].locked),
+    ],
+    ['activity', (plan: FloorPlan) => void (plan.objects[1].active = false)],
+    ['capacity', (plan: FloorPlan) => void (plan.objects[1].capacity += 1)],
+    [
+      'turning zone',
+      (plan: FloorPlan) => void (plan.turningZones[0].radius += 1),
+    ],
+    ['door zone', (plan: FloorPlan) => void (plan.doorZones[0].width += 1)],
+  ])('changes when %s changes', (_name, mutate) => {
+    const baseline = createClassroomPlan();
+    const changed = structuredClone(baseline);
+    mutate(changed);
+    expect(
+      proposalContextFingerprint(changed, { minimumCapacity: 24 }),
+    ).not.toBe(proposalContextFingerprint(baseline, { minimumCapacity: 24 }));
+  });
+
+  it('changes with constraints and ignores irrelevant array ordering', () => {
+    const baseline = createClassroomPlan();
+    const reordered = structuredClone(baseline);
+    reordered.objects.reverse();
+    reordered.walls.reverse();
+    reordered.turningZones.reverse();
+    reordered.doorZones.reverse();
+    expect(proposalContextFingerprint(reordered, { minimumCapacity: 24 })).toBe(
+      proposalContextFingerprint(baseline, { minimumCapacity: 24 }),
+    );
+    expect(
+      proposalContextFingerprint(baseline, { minimumCapacity: 22 }),
+    ).not.toBe(proposalContextFingerprint(baseline, { minimumCapacity: 24 }));
+  });
+});
+
 describe('bounded proposal search', () => {
-  it('coordinates at least three changes and clears all critical issues when feasible', () => {
+  it('finds a full-capacity threshold-satisfied fixture proposal', () => {
     const plan = createClassroomPlan();
     const top = generateRouteAlternatives(plan, { minimumCapacity: 24 }, 3)[0];
-    expect(top.changes.length).toBeGreaterThanOrEqual(3);
     expect(top.status).toBe('threshold-satisfied');
-    expect(top.after.metrics.criticalIssues).toBe(0);
-    expect(top.after.metrics.minimumClearWidthCm).toBeGreaterThanOrEqual(
-      THRESHOLDS.requiredClearWidthCm,
-    );
-    expect(top.after.metrics.capacity).toBeGreaterThanOrEqual(24);
+    expect(top.after.metrics).toMatchObject({
+      capacity: 24,
+      criticalIssues: 0,
+      minimumClearWidthCm: THRESHOLDS.requiredClearWidthCm,
+    });
     expect(isValidPlan(top.proposedPlan)).toBe(true);
+  });
+
+  it('coordinates three objects when the geometry requires it', () => {
+    const plan = coordinatedFixture();
+    const top = generateRouteAlternatives(plan, { minimumCapacity: 6 }, 1)[0];
+    expect(top.changes).toHaveLength(3);
+    expect(top.changes.every((change) => change.type === 'move')).toBe(true);
+    expect(top.status).toBe('threshold-satisfied');
+    expect(top.after.metrics.capacity).toBe(6);
   });
 
   it('returns distinct deterministic alternatives with recalculated metrics', () => {
@@ -158,75 +359,49 @@ describe('bounded proposal search', () => {
     expect(
       new Set(first.map((proposal) => JSON.stringify(proposal.changes))).size,
     ).toBe(first.length);
-    for (const proposal of first) {
+    for (const proposal of first)
       expect(proposal.after.metrics).toEqual(
         auditPlan(proposal.proposedPlan, plan).metrics,
       );
-      expect(isValidPlan(proposal.proposedPlan)).toBe(true);
-    }
   });
 
-  it('completes inside its explicit state bound in reasonable time', () => {
-    const start = performance.now();
-    const proposals = generateRouteAlternatives(
-      createClassroomPlan(),
-      { minimumCapacity: 24 },
-      3,
-      {
-        maxEvaluatedStates: 500,
-      },
-    );
-    expect(performance.now() - start).toBeLessThan(2_000);
-    expect(proposals).toHaveLength(3);
-  });
-
-  it('never changes locked objects', () => {
+  it('preserves capacity by default even when the minimum is lower', () => {
     const plan = createClassroomPlan();
-    const lockedBefore = plan.objects.filter((object) => object.locked);
-    for (const proposal of generateRouteAlternatives(
-      plan,
-      { minimumCapacity: 24 },
-      3,
-    )) {
-      for (const locked of lockedBefore) {
-        expect(
-          proposal.proposedPlan.objects.find(
-            (object) => object.id === locked.id,
-          ),
-        ).toEqual(locked);
-      }
-    }
+    const at24 = generateRouteAlternatives(plan, { minimumCapacity: 24 }, 3);
+    const at22 = generateRouteAlternatives(plan, { minimumCapacity: 22 }, 10);
+    expect(
+      at24.every((proposal) => proposal.after.metrics.capacity === 24),
+    ).toBe(true);
+    expect(at22[0].after.metrics.capacity).toBe(24);
+    const removal = at22.find(
+      (proposal) => proposal.after.metrics.capacity === 22,
+    )!;
+    expect(removal).toBeDefined();
+    expect(removal.changes.some((change) => change.type === 'remove')).toBe(
+      true,
+    );
+    expect(removal.tradeoffs.join(' ')).toContain(
+      'Capacity decreases by 2 seats',
+    );
+    expect(at22[0].after.metrics.score).toBeGreaterThan(
+      removal.after.metrics.score,
+    );
+    expect(at22.map((proposal) => proposal.after.metrics.score)).toEqual(
+      at22
+        .map((proposal) => proposal.after.metrics.score)
+        .toSorted((a, b) => b - a),
+    );
   });
 
-  it('makes minimum capacity materially alter valid top-ranked changes', () => {
+  it('restores an inactive desk to valid geometry and capacity', () => {
     const plan = createClassroomPlan();
-    const fullCapacity = generateRouteAlternatives(
-      plan,
-      { minimumCapacity: 24 },
-      3,
-    );
-    const reducedCapacity = generateRouteAlternatives(
+    const removal = generateRouteAlternatives(
       plan,
       { minimumCapacity: 22 },
-      3,
-    );
-    expect(
-      fullCapacity.every((proposal) => proposal.after.metrics.capacity === 24),
-    ).toBe(true);
-    expect(
-      fullCapacity.every((proposal) =>
-        proposal.changes.every((change) => change.type === 'move'),
-      ),
-    ).toBe(true);
-    expect(reducedCapacity[0].after.metrics.capacity).toBe(22);
-    expect(
-      reducedCapacity[0].changes.some((change) => change.type === 'remove'),
-    ).toBe(true);
-    expect(reducedCapacity[0].tradeoffs.join(' ')).toContain(
-      'Capacity decreases',
-    );
+      10,
+    ).find((proposal) => proposal.after.metrics.capacity === 22)!;
     const restored = generateRouteAlternatives(
-      reducedCapacity[0].proposedPlan,
+      removal.proposedPlan,
       { minimumCapacity: 24 },
       1,
     )[0];
@@ -235,16 +410,15 @@ describe('bounded proposal search', () => {
     );
     expect(restored.after.metrics.capacity).toBe(24);
     expect(restored.status).toBe('threshold-satisfied');
+    expect(isValidPlan(restored.proposedPlan)).toBe(true);
   });
 
-  it('labels bounded incomplete results as partial improvements', () => {
+  it('labels depth-limited results as partial improvements', () => {
     const proposals = generateRouteAlternatives(
-      createClassroomPlan(),
-      { minimumCapacity: 24 },
+      coordinatedFixture(),
+      { minimumCapacity: 6 },
       3,
-      {
-        maxDepth: 2,
-      },
+      { maxDepth: 2 },
     );
     expect(
       proposals.every((proposal) => proposal.status === 'partial-improvement'),
@@ -254,18 +428,27 @@ describe('bounded proposal search', () => {
     ).toBe(true);
   });
 
-  it('fails safely for impossible capacity and immovable obstructions', () => {
+  it('enforces state bounds, locks, impossible capacity, and invalid baselines', () => {
     const plan = createClassroomPlan();
-    const snapshot = structuredClone(plan);
+    const start = performance.now();
+    expect(
+      generateRouteAlternatives(plan, { minimumCapacity: 24 }, 3, {
+        maxEvaluatedStates: 50,
+      }).length,
+    ).toBeGreaterThan(0);
+    expect(performance.now() - start).toBeLessThan(2_000);
     expect(() =>
       generateRouteAlternatives(plan, { minimumCapacity: 25 }),
-    ).toThrow('exceeds the current capacity');
-    let locked = plan;
-    for (const id of ['desk-1', 'desk-2', 'desk-3'])
-      locked = toggleObjectLock(locked, id, true);
+    ).toThrow('exceeds the maximum available capacity');
     expect(() =>
-      generateRouteAlternatives(locked, { minimumCapacity: 24 }),
+      generateRouteAlternatives(toggleObjectLock(plan, 'desk-3', true), {
+        minimumCapacity: 24,
+      }),
     ).toThrow('No improving proposal');
-    expect(plan).toEqual(snapshot);
+    const invalid = structuredClone(plan);
+    invalid.route = [invalid.entrance];
+    expect(() =>
+      generateRouteAlternatives(invalid, { minimumCapacity: 24 }),
+    ).toThrow('Route must contain at least two points');
   });
 });

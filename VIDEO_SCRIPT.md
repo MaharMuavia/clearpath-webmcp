@@ -2,7 +2,7 @@
 
 ## 0:00–0:15 — Establish the problem
 
-Open `/studio` on the North Hall classroom. Point to the three measured corridor intrusions, 25 cm minimum centreline clearance, 50 cm centred clear width, and the route/required zones drawn from the same model.
+Open `/studio` on the North Hall classroom. Point to the measured Desk 3 corridor intrusion, 10 cm minimum centreline clearance, 20 cm centred clear width, and the route/required zones drawn from the same model. Show that the presentation wall remains physical geometry and that the route approaches its target perpendicularly.
 
 Say: “ClearPath is an accessibility planning aid. This is calculated geometry, not a scripted score and not legal certification.”
 
@@ -20,7 +20,7 @@ Prompt:
 
 > Give me the exact geometry behind that issue, including the route points, object coordinates, locks, and required zones.
 
-Briefly show `get_plan_geometry`. Emphasize that object identity, centimetre coordinates, capacity contribution, locks, and semantic zones cannot be recovered reliably from pixels.
+Briefly show `get_plan_geometry`. Emphasize that walls, terminal-contact semantics, object identity, centimetre coordinates, capacity contribution, locks, and semantic zones cannot be recovered reliably from pixels.
 
 ## 0:55–1:15 — Add human constraints
 
@@ -28,7 +28,7 @@ In the visible UI, lock Desk 8 and leave required capacity at 24. Then prompt:
 
 > Respect my current locks and all 24 seats. Generate the two best route alternatives.
 
-Show two different `generate_route_alternatives` results. Point out the **Threshold satisfied** status, different change coordinates, search rationale, and trade-offs—not just differently worded copies.
+Show two different full-capacity `generate_route_alternatives` results. Point out the **Threshold satisfied** status, different change coordinates, search rationale, and trade-offs—not just differently worded copies. The top option moves Desk 3 from `(600, 130)` to `(520, 130)`, preserves 24 seats, reaches 90 cm centred clear width, clears all issues, and scores 98.
 
 ## 1:15–1:40 — Stage and compare
 

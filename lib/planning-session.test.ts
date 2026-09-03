@@ -4,6 +4,7 @@ import {
   applyStagedProposal,
   createPlanningSession,
   generateAlternatives,
+  proposalIsCurrent,
   rejectStagedProposal,
   requestProposalApproval,
   setConstraints,
@@ -13,6 +14,7 @@ import {
   type EventFactory,
   type PlanningSession,
 } from './planning-session';
+import type { FloorPlan } from './planning-engine';
 
 let sequence = 0;
 const events: EventFactory = (event) => ({
@@ -86,6 +88,47 @@ describe('versioned planning session', () => {
         events,
       ),
     ).toThrow('unavailable or stale');
+  });
+
+  it('enforces the human approval boundary at runtime', () => {
+    const generated = generatedSession();
+    const proposal = generated.alternatives[0];
+    const staged = stageProposal(generated, proposal.id, 'agent', events);
+    expect(() =>
+      applyStagedProposal(
+        staged,
+        proposal.id,
+        'agent' as unknown as 'human',
+        events,
+      ),
+    ).toThrow('Only a visible human approval action');
+    expect(staged.committed.versionId).toBe('north-hall-v1');
+  });
+
+  it('makes undo available only while an approved snapshot exists', () => {
+    const initial = createPlanningSession(createClassroomPlan(), events);
+    expect(() => undoLastChange(initial, 'human', events)).toThrow(
+      'There is no applied change to undo',
+    );
+    const generated = generateAlternatives(initial, 'agent', events);
+    const staged = stageProposal(
+      generated,
+      generated.alternatives[0].id,
+      'agent',
+      events,
+    );
+    const applied = applyStagedProposal(
+      staged,
+      staged.staged!.id,
+      'human',
+      events,
+    );
+    expect(applied.undoStack).toHaveLength(1);
+    const undone = undoLastChange(applied, 'human', events);
+    expect(undone.undoStack).toHaveLength(0);
+    expect(() => undoLastChange(undone, 'human', events)).toThrow(
+      'There is no applied change to undo',
+    );
   });
 
   it('undo restores removed activity, capacity, locks, and coordinates exactly', () => {
@@ -174,6 +217,28 @@ describe('versioned planning session', () => {
     ).toThrow('unavailable or stale');
   });
 
+  it.each([
+    ['dimensions', (plan: FloorPlan) => void (plan.height += 1)],
+    ['wall', (plan: FloorPlan) => void (plan.walls[0].end.x += 1)],
+    ['entrance', (plan: FloorPlan) => void (plan.entrance.x += 1)],
+    ['destination', (plan: FloorPlan) => void (plan.destination.x += 1)],
+    ['route', (plan: FloorPlan) => void (plan.route[1].y += 1)],
+    ['object size', (plan: FloorPlan) => void (plan.objects[1].width += 1)],
+    [
+      'turning zone',
+      (plan: FloorPlan) => void (plan.turningZones[0].radius += 1),
+    ],
+    ['door zone', (plan: FloorPlan) => void (plan.doorZones[0].height += 1)],
+  ])('invalidates proposals after a %s context change', (_name, mutate) => {
+    const generated = generatedSession();
+    const proposal = generated.alternatives[0];
+    const committed = structuredClone(generated.committed);
+    mutate(committed);
+    expect(proposalIsCurrent({ ...generated, committed }, proposal)).toBe(
+      false,
+    );
+  });
+
   it('a failed search preserves committed geometry and constraints', () => {
     let initial = createPlanningSession(createClassroomPlan(), events);
     for (const id of ['desk-1', 'desk-2', 'desk-3']) {
@@ -192,5 +257,29 @@ describe('versioned planning session', () => {
       expect(failed.constraints).toEqual(initial.constraints);
       expect(failed.history.at(-1)?.result).toBe('failed');
     }
+  });
+
+  it('records chronological system, agent, and human actions', () => {
+    const generated = generatedSession();
+    const staged = stageProposal(
+      generated,
+      generated.alternatives[0].id,
+      'agent',
+      events,
+    );
+    const applied = applyStagedProposal(
+      staged,
+      staged.staged!.id,
+      'human',
+      events,
+    );
+    expect(applied.history.map((event) => event.actor)).toEqual([
+      'system',
+      'agent',
+      'agent',
+      'human',
+    ]);
+    const timestamps = applied.history.map((event) => event.timestamp);
+    expect(timestamps).toEqual(timestamps.toSorted());
   });
 });

@@ -3,6 +3,7 @@ import {
   generateRouteAlternatives,
   proposalContextFingerprint,
   toggleObjectLock,
+  validatePlan,
   type AuditActor,
   type AuditEvent,
   type FloorPlan,
@@ -234,6 +235,10 @@ export function applyStagedProposal(
   actor: 'human',
   factory: EventFactory = browserEventFactory,
 ): PlanningSession {
+  if ((actor as string) !== 'human')
+    throw new Error(
+      'Only a visible human approval action can commit geometry.',
+    );
   if (
     !session.staged ||
     session.staged.id !== proposalId ||
@@ -241,6 +246,14 @@ export function applyStagedProposal(
   )
     throw new Error(
       'The proposal is rejected, stale, or not currently staged.',
+    );
+  const validation = validatePlan(
+    session.staged.proposedPlan,
+    session.committed,
+  );
+  if (!validation.valid)
+    throw new Error(
+      `The staged proposal is structurally invalid: ${validation.errors.join(' ')}`,
     );
   const before = structuredClone(session.committed);
   const committed = structuredClone(session.staged.proposedPlan);

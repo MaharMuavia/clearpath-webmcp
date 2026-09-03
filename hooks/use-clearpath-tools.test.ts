@@ -96,6 +96,78 @@ describe('WebMCP contracts', () => {
     });
   });
 
+  it('uses closed schemas, accurate annotations, and bounded identifiers', () => {
+    const baseline = createPlanningSession(createClassroomPlan());
+    const generated = generateAlternatives(baseline, 'agent');
+    const staged = stageProposal(
+      generated,
+      generated.alternatives[0].id,
+      'agent',
+    );
+    const tools = buildToolDefinitions(staged, actions(staged));
+    for (const tool of tools) {
+      expect(tool.inputSchema).toMatchObject({
+        type: 'object',
+        additionalProperties: false,
+      });
+      expect(tool.annotations.untrustedContentHint).toBe(false);
+    }
+    expect(
+      tools.find((tool) => tool.name === 'get_plan_summary')!.annotations
+        .readOnlyHint,
+    ).toBe(true);
+    expect(
+      tools.find((tool) => tool.name === 'focus_audit_issue')!.annotations
+        .readOnlyHint,
+    ).toBe(false);
+    expect(() =>
+      tools
+        .find((tool) => tool.name === 'stage_route_proposal')!
+        .execute({ proposalId: 'x'.repeat(257) }),
+    ).toThrow('at most 256 characters');
+  });
+
+  it('returns metrics from the visible staged geometry and exact physical geometry', () => {
+    const baseline = createPlanningSession(createClassroomPlan());
+    const generated = generateAlternatives(baseline, 'agent');
+    const staged = stageProposal(
+      generated,
+      generated.alternatives[0].id,
+      'agent',
+    );
+    const tools = buildToolDefinitions(staged, actions(staged));
+    expect(
+      tools.find((tool) => tool.name === 'get_plan_summary')!.execute({}),
+    ).toMatchObject({
+      committedVersionId: baseline.committed.versionId,
+      versionId: staged.staged!.proposedPlan.versionId,
+      viewing: 'staged-proposal',
+      metrics: staged.staged!.after.metrics,
+    });
+    expect(
+      tools.find((tool) => tool.name === 'get_plan_geometry')!.execute({}),
+    ).toMatchObject({
+      route: staged.staged!.proposedPlan.route,
+      walls: staged.staged!.proposedPlan.walls,
+      terminalApproach: { validPerpendicularContact: true },
+    });
+  });
+
+  it('rejects unknown IDs and impossible tool constraints at execution time', () => {
+    const baseline = createPlanningSession(createClassroomPlan());
+    const tools = buildToolDefinitions(baseline, actions(baseline));
+    expect(() =>
+      tools
+        .find((tool) => tool.name === 'focus_audit_issue')!
+        .execute({ issueId: 'missing' }),
+    ).toThrow('Issue is not open');
+    expect(() =>
+      tools
+        .find((tool) => tool.name === 'set_planning_constraints')!
+        .execute({ minimumCapacity: 25 }),
+    ).toThrow('cannot exceed available capacity 24');
+  });
+
   it('keeps apply as an approval request that cannot commit geometry', () => {
     const baseline = createPlanningSession(createClassroomPlan());
     const generated = generateAlternatives(baseline, 'agent');
