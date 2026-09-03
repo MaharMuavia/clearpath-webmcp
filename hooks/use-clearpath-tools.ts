@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import {
   auditPlan,
   exactGeometry,
+  type AuditActor,
   type PlanningConstraints,
   type RouteProposal,
 } from '@/lib/planning-engine';
@@ -19,16 +20,22 @@ export type ToolDefinition = {
   description: string;
   inputSchema: Record<string, unknown>;
   annotations: { readOnlyHint: boolean; untrustedContentHint: boolean };
-  execute: (input: unknown) => unknown;
+  execute: (
+    input: unknown,
+    options?: { signal?: AbortSignal },
+  ) => unknown;
 };
 type ToolActions = {
   focusIssue: (issueId: string) => void;
   setConstraints: (constraints: PlanningConstraints) => PlanningSession;
-  generateAlternatives: () => PlanningSession;
+  generateAlternatives: (signal?: AbortSignal) => PlanningSession;
   stageProposal: (proposalId: string) => PlanningSession;
   requestApproval: (proposalId: string) => PlanningSession;
-  rejectProposal: (proposalId: string) => PlanningSession;
-  undo: () => PlanningSession;
+  rejectProposal: (
+    proposalId: string,
+    actor: AuditActor,
+  ) => PlanningSession;
+  undo: (actor: AuditActor) => PlanningSession;
 };
 
 declare global {
@@ -246,9 +253,9 @@ export function buildToolDefinitions(
         additionalProperties: false,
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
-      execute: (input) => {
+      execute: (input, options) => {
         objectInput(input, []);
-        const next = actions.generateAlternatives();
+        const next = actions.generateAlternatives(options?.signal);
         return {
           baselineVersionId: next.committed.versionId,
           alternatives: next.alternatives.map(conciseProposal),
@@ -398,7 +405,7 @@ export function buildToolDefinitions(
           const proposalId = stringField(input, 'proposalId');
           if (session.staged?.id !== proposalId)
             throw new Error('The proposal is rejected, stale, or not staged.');
-          const next = actions.rejectProposal(proposalId);
+          const next = actions.rejectProposal(proposalId, 'agent');
           return {
             rejected: true,
             proposalId,
@@ -421,7 +428,7 @@ export function buildToolDefinitions(
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute: (input) => {
         objectInput(input, []);
-        const next = actions.undo();
+        const next = actions.undo('agent');
         return {
           undone: true,
           restoredVersionId: next.committed.versionId,
@@ -452,10 +459,10 @@ export function useClearPathTools(
     )) {
       const tool: ToolDefinition = {
         ...definition,
-        execute: (input) =>
+        execute: (input, options) =>
           buildToolDefinitions(sessionRef.current, actionsRef.current)
             .find((candidate) => candidate.name === definition.name)
-            ?.execute(input) ??
+            ?.execute(input, options) ??
           (() => {
             throw new Error(
               `${definition.name} is not available in the current state.`,

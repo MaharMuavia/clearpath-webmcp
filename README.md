@@ -1,12 +1,12 @@
 # ClearPath
 
+> **BEFORE SUBMITTING:** Redeploy; re-verify both the root and `/studio` URLs return 200; re-verify CI is green on the pushed commit; and record the CI run URL.
+
 [![CI](https://github.com/MaharMuavia/clearpath-webmcp/actions/workflows/ci.yml/badge.svg)](https://github.com/MaharMuavia/clearpath-webmcp/actions/workflows/ci.yml)
 
 **ClearPath is a WebMCP-native accessibility planning studio that audits real floor-plan geometry, searches constraint-safe layout alternatives, and keeps every change human-approved and undoable.**
 
-[Open the deployed application](https://clearpath-access.hanzlakhan2266.chatgpt.site) · [Launch the deployed studio](https://clearpath-access.hanzlakhan2266.chatgpt.site/studio)
-
-The deployment URL is provided for evaluation, but it must be redeployed and verified against the final source revision before submission.
+Run the application locally with `npm ci && npm run dev`.
 
 ![Current ClearPath geometry studio](public/studio.png)
 
@@ -55,14 +55,14 @@ The explainable planning heuristic starts at 100 and subtracts:
 - 22 per critical conflict;
 - 10 per review conflict;
 - 0.25 per centimetre below the configured 90 cm clear-width planning threshold;
-- 2 per moved object; and
+- 2 per changed object (moved, removed, or restored); and
 - 4 per lost seat relative to baseline.
 
 Scores are clamped to 0–100. This is a planning heuristic, not legal certification. Requirements vary by jurisdiction.
 
-Proposal generation uses a deterministic beam search over geometry-implicated movable objects, bounded candidate positions, explicit desk-removal and restoration candidates, incremental validation, duplicate-state elimination, a maximum depth of four changes, a beam width of 72, and a 1,500-state evaluation cap. It ranks lexicographically: route blockers, whether required clear width is met, clear-width deficit, other critical conflicts, review issues, minimum-capacity feasibility, capacity loss from the committed baseline, changed-object count, movement distance, then route length. Lowering the minimum to 22 permits a removal alternative but does not request one: the comparable 24-seat solution remains first. A proposal is labelled **Threshold satisfied** only when it has zero critical issues, reaches the 90 cm planning threshold, and preserves the configured minimum capacity; all other useful results are labelled **Partial improvement**.
+Proposal generation uses a deterministic beam search over geometry-implicated movable objects, bounded candidate positions, explicit desk-removal and restoration candidates, incremental validation, duplicate-state elimination, a maximum depth of four changes, a beam width of 72, and a 1,500-state evaluation cap. It ranks lexicographically: route blockers, whether required clear width is met, clear-width deficit, other critical conflicts, review issues, minimum-capacity feasibility, capacity loss from the committed baseline, changed-object count, movement distance, then route length. Lowering the minimum to 22 permits a removal alternative but does not request one: the comparable 24-seat solution remains first. A proposal is labelled **Threshold satisfied** only when it has zero open issues of any severity, reaches at least the 90 cm planning threshold, and preserves at least the configured minimum capacity; all other useful results are labelled **Partial improvement**.
 
-For the checked fixture, the committed baseline reports one critical Desk 3 corridor intrusion, 10 cm centreline clearance, 20 cm centred clear width, 24 seats, score 61, and a 1,048 cm route. The top full-capacity proposal moves Desk 3 from `(600, 130)` to `(520, 130)`, reaches 45/90 cm centreline/centred clearance, has no open issues, preserves 24 seats, and scores 98. These values are derived by the engine and asserted independently in tests.
+For the checked fixture, the committed baseline reports one critical Desk 3 corridor intrusion, 10 cm centreline clearance, 20 cm centred clear width, 24 seats, score 61, and a 1,048 cm route. The top full-capacity proposal moves Desk 3 from `(600, 130)` to `(530, 130)` with `distanceCm: 70`, reaches 45/90 cm centreline/centred clearance, has no open issues, preserves 24 seats, and scores 98. These values are derived by the engine and asserted independently in tests.
 
 ## WebMCP tools
 
@@ -90,7 +90,7 @@ All schemas use `additionalProperties: false`; identifiers and values are bounde
 - Locked objects never move.
 - Capacity, boundaries, and object overlap are hard constraints.
 - Failed searches do not mutate current state.
-- Proposal IDs are bound to a deterministic fingerprint of plan identity/version, dimensions, unit/scale, walls, entrance, destination, ordered route, object geometry/rotation/activity/locks/capacity, required zones, constraints, and thresholds; stale/rejected IDs cannot stage or apply.
+- Proposal IDs are bound to a deterministic 32-bit FNV-1a fingerprint of plan identity/version, dimensions, unit/scale, walls, entrance, destination, ordered route, object geometry/rotation/activity/locks/capacity, required zones, constraints, and thresholds. That non-cryptographic hash is acceptable for stale-context detection in this local scope; stale/rejected IDs cannot stage or apply.
 - Agent apply calls only request visible human approval.
 - The commit function also enforces the human actor and revalidates staged geometry at runtime.
 - Apply stores the exact prior plan; undo restores it rather than reconstructing it.
@@ -111,6 +111,10 @@ npm run dev
 
 Open the printed local URL. WebMCP is feature-detected; unsupported browsers use the same human interface without tool registration.
 
+## Deployment
+
+The configured deployment is not yet publicly reachable. Its root and `/studio` endpoints currently require authorization, so the deployment URL must be re-verified before submission. `metadataBase` remains configured to that intended production origin because there is no verified replacement origin yet.
+
 ## Verification
 
 ```bash
@@ -124,7 +128,7 @@ npm audit --audit-level=high
 
 CI runs type checking, lint, unit/integration tests, build, and Chromium end-to-end tests on pushes and pull requests.
 
-Current local evidence: 64 Vitest unit/contract tests pass. Chromium mock-host execution, native ChatGPT tool selection, deployment, and CI for the final revision require environment-specific verification; mock-host results must not be treated as native-host evidence.
+Current local evidence: 74 Vitest unit/contract tests and 9 Chromium workflows pass locally. Native ChatGPT tool selection, deployment, and CI for the final revision require environment-specific verification; mock-host results must not be treated as native-host evidence.
 
 ## Limitations
 
@@ -137,7 +141,7 @@ Current local evidence: 64 Vitest unit/contract tests pass. Chromium mock-host e
 ## Demo prompts
 
 1. `Audit the current access route and focus the most severe measured issue.`
-2. `I have locked Desk 3 in the visible interface. Preserve my current locks and all 24 seats, then generate the two best route-clearance layout alternatives.`
+2. `I have locked Desk 8 in the visible interface. Preserve my current locks and all 24 seats, then generate the two best route-clearance layout alternatives.`
 3. `Stage the highest-ranked alternative and compare exact before-and-after metrics and coordinates.`
 4. `Request approval for the staged plan, but do not commit anything without my visible approval.`
 5. `Show the audit history, then undo the last approved plan change.`
@@ -145,7 +149,7 @@ Current local evidence: 64 Vitest unit/contract tests pass. Chromium mock-host e
 ## GitHub About settings
 
 - **Description:** `WebMCP-native accessibility planning with real geometry audits, constraint-safe proposals, human approval, and exact undo.`
-- **Homepage:** `https://clearpath-access.hanzlakhan2266.chatgpt.site`
+- **Homepage:** Leave unset until the deployment is publicly reachable and re-verified.
 - **Topics:** `webmcp`, `accessibility`, `computational-geometry`, `ai-agents`, `human-in-the-loop`, `nextjs`, `typescript`, `floor-plan`, `inclusive-design`, `hackathon`
 
 ## License

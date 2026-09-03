@@ -77,6 +77,10 @@ describe('versioned planning session', () => {
       applyStagedProposal(applied, proposal.id, 'human', events),
     ).toThrow('rejected, stale');
     const restored = undoLastChange(applied, 'human', events);
+    expect(restored.history.at(-1)).toMatchObject({
+      actor: 'human',
+      action: 'plan_change_undone',
+    });
     expect(restored.committed).toEqual(original);
     expect(restored.alternatives).toEqual([]);
     expect(restored.staged).toBeNull();
@@ -163,6 +167,10 @@ describe('versioned planning session', () => {
     const staged = stageProposal(generated, proposal.id, 'agent', events);
     const committed = structuredClone(staged.committed);
     const rejected = rejectStagedProposal(staged, 'human', events);
+    expect(rejected.history.at(-1)).toMatchObject({
+      actor: 'human',
+      action: 'proposal_rejected',
+    });
     expect(rejected.committed).toEqual(committed);
     expect(rejected.alternatives).toEqual([]);
     expect(() => stageProposal(rejected, proposal.id, 'agent', events)).toThrow(

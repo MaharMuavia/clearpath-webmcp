@@ -1,5 +1,7 @@
 'use client';
 
+/* oxlint-disable jsx-a11y/prefer-tag-over-role -- SVG accessibility requires explicit image roles. */
+
 import {
   Accessibility,
   Bot,
@@ -19,6 +21,7 @@ import { useClearPathTools } from '@/hooks/use-clearpath-tools';
 import {
   auditPlan,
   createClassroomPlan,
+  type AuditActor,
   type AuditIssue,
   type FloorPlan,
   type PlanChange,
@@ -42,7 +45,7 @@ type View = 'plan' | 'compare' | 'history';
 
 function describeChange(change: PlanChange): string {
   if (change.type === 'move')
-    return `${change.objectName} ${change.distanceCm} cm`;
+    return `${change.objectName} moved ${change.distanceCm} cm from (${change.from.x}, ${change.from.y}) to (${change.to.x}, ${change.to.y})`;
   if (change.type === 'remove')
     return `${change.objectName} removed (${change.previousCapacity} seats)`;
   return `${change.objectName} restored (${change.restoredCapacity} seats)`;
@@ -101,6 +104,14 @@ export function ClearPathStudio() {
     () => auditPlan(plan, session.baseline),
     [plan, session.baseline],
   );
+  const maximumCapacity = useMemo(
+    () =>
+      session.committed.objects.reduce(
+        (sum, object) => sum + object.capacity,
+        0,
+      ),
+    [session.committed.objects],
+  );
 
   const transition = useCallback(
     (
@@ -145,9 +156,10 @@ export function ClearPathStudio() {
     [transition],
   );
   const makeAlternatives = useCallback(
-    () =>
+    (signal?: AbortSignal) =>
       transition(
-        (current) => generateAlternatives(current, 'agent'),
+        (current) =>
+          generateAlternatives(current, 'agent', undefined, signal),
         (next) =>
           `${next.alternatives.length} distinct geometry-derived alternatives generated.`,
       ),
@@ -160,7 +172,7 @@ export function ClearPathStudio() {
       return transition(
         (current) => stageProposal(current, proposalId, 'agent'),
         (next) =>
-          `${next.staged?.id} staged without changing the committed plan.`,
+          `${next.staged?.id} staged without changing the committed plan. ${next.staged?.changes.map(describeChange).join('; ')}.`,
       );
     },
     [transition],
@@ -178,21 +190,21 @@ export function ClearPathStudio() {
     [transition],
   );
   const reject = useCallback(
-    (proposalId: string) => {
+    (proposalId: string, actor: AuditActor) => {
       if (sessionRef.current.staged?.id !== proposalId)
         throw new Error('Proposal is not staged.');
       setApprovalRequested(false);
       return transition(
-        (current) => rejectStagedProposal(current, 'human'),
+        (current) => rejectStagedProposal(current, actor),
         () => `${proposalId} rejected; committed geometry unchanged.`,
       );
     },
     [transition],
   );
   const undo = useCallback(
-    () =>
+    (actor: AuditActor) =>
       transition(
-        (current) => undoLastChange(current, 'human'),
+        (current) => undoLastChange(current, actor),
         (next) => `Restored exact plan version ${next.committed.versionId}.`,
       ),
     [transition],
@@ -250,6 +262,28 @@ export function ClearPathStudio() {
   const selectedIssue = audit.issues.find(
     (issue) => issue.id === selectedIssueId,
   );
+  const selectViewFromKeyboard = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    currentView: View,
+  ) => {
+    const views: View[] = ['plan', 'compare', 'history'];
+    const currentIndex = views.indexOf(currentView);
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? views.length - 1
+          : event.key === 'ArrowLeft'
+            ? (currentIndex - 1 + views.length) % views.length
+            : event.key === 'ArrowRight'
+              ? (currentIndex + 1) % views.length
+              : null;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextView = views[nextIndex];
+    setView(nextView);
+    document.getElementById(`studio-tab-${nextView}`)?.focus();
+  };
 
   return (
     <main className="min-h-screen bg-[#edf2ec] text-[#17221b]">
@@ -265,7 +299,7 @@ export function ClearPathStudio() {
                 WebMCP
               </Badge>
             </div>
-            <p className="text-[10px] uppercase tracking-[.12em] text-[#718078]">
+            <p className="text-[10px] uppercase tracking-[.12em] text-[var(--studio-muted)]">
               Geometry planning studio
             </p>
           </div>
@@ -276,7 +310,7 @@ export function ClearPathStudio() {
             disabled={!session.undoStack.length}
             onClick={() => {
               try {
-                undo();
+                undo('human');
               } catch {
                 /* surfaced */
               }
@@ -294,12 +328,12 @@ export function ClearPathStudio() {
       </header>
       <div className="grid min-h-[calc(100vh-64px)] lg:grid-cols-[240px_minmax(0,1fr)_320px]">
         <aside className="border-r border-[#d4ddd4] bg-[#f5f8f2] p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[#79867e]">
+          <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[var(--studio-muted)]">
             Current project
           </p>
           <div className="mt-2 rounded-2xl border border-[#bdcdbf] bg-white p-4 shadow-sm">
             <p className="font-bold">North Hall</p>
-            <p className="mt-1 text-xs text-[#718078]">
+            <p className="mt-1 text-xs text-[var(--studio-muted)]">
               Workshop classroom · 9 × 6 m
             </p>
             <p className="mt-3 text-xs font-semibold">
@@ -314,12 +348,12 @@ export function ClearPathStudio() {
               id="capacity"
               type="number"
               min="0"
-              max="24"
+              max={maximumCapacity}
               value={session.constraints.minimumCapacity}
               onChange={(event) => updateCapacity(Number(event.target.value))}
               className="mt-2 h-10 w-full rounded-xl border border-[#c7d3c7] bg-white px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
             />
-            <p className="mt-1 text-[10px] text-[#748178]">
+            <p className="mt-1 text-[10px] text-[var(--studio-muted)]">
               Current model capacity: {audit.metrics.capacity}
             </p>
           </div>
@@ -358,7 +392,7 @@ export function ClearPathStudio() {
         <section className="min-w-0 p-3 sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[#748178]">
+              <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[var(--studio-muted)]">
                 Live structured plan
               </p>
               <h1 className="mt-1 text-2xl font-bold tracking-[-.04em]">
@@ -372,11 +406,17 @@ export function ClearPathStudio() {
             >
               {(['plan', 'compare', 'history'] as View[]).map((item) => (
                 <button
+                  id={`studio-tab-${item}`}
                   role="tab"
                   aria-selected={view === item}
+                  aria-controls={`studio-panel-${item}`}
+                  tabIndex={view === item ? 0 : -1}
                   key={item}
                   onClick={() => setView(item)}
-                  className={`rounded-lg px-3 py-2 text-xs font-bold capitalize ${view === item ? 'bg-[#edf4ec] text-[#214737]' : 'text-[#76837b]'}`}
+                  onKeyDown={(event) =>
+                    selectViewFromKeyboard(event, item)
+                  }
+                  className={`rounded-lg px-3 py-2 text-xs font-bold capitalize ${view === item ? 'bg-[#edf4ec] text-[#214737]' : 'text-[var(--studio-muted)]'}`}
                 >
                   {item}
                 </button>
@@ -409,28 +449,54 @@ export function ClearPathStudio() {
               {error}
             </div>
           )}
-          {view === 'plan' && (
-            <PlanCanvas
-              plan={plan}
-              committed={session.committed}
-              staged={session.staged !== null}
-              selectedObjectId={selectedIssue?.objectId ?? null}
-            />
-          )}
-          {view === 'compare' && (
-            <CompareView
-              session={session}
-              approvalRequested={approvalRequested}
-              onApply={apply}
-              onReject={() => session.staged && reject(session.staged.id)}
-            />
-          )}
-          {view === 'history' && <HistoryView session={session} />}
+          <div
+            id="studio-panel-plan"
+            role="tabpanel"
+            aria-labelledby="studio-tab-plan"
+            hidden={view !== 'plan'}
+            tabIndex={0}
+          >
+            {view === 'plan' && (
+              <PlanCanvas
+                plan={plan}
+                committed={session.committed}
+                staged={session.staged !== null}
+                selectedObjectId={selectedIssue?.objectId ?? null}
+              />
+            )}
+          </div>
+          <div
+            id="studio-panel-compare"
+            role="tabpanel"
+            aria-labelledby="studio-tab-compare"
+            hidden={view !== 'compare'}
+            tabIndex={0}
+          >
+            {view === 'compare' && (
+              <CompareView
+                session={session}
+                approvalRequested={approvalRequested}
+                onApply={apply}
+                onReject={() =>
+                  session.staged && reject(session.staged.id, 'human')
+                }
+              />
+            )}
+          </div>
+          <div
+            id="studio-panel-history"
+            role="tabpanel"
+            aria-labelledby="studio-tab-history"
+            hidden={view !== 'history'}
+            tabIndex={0}
+          >
+            {view === 'history' && <HistoryView session={session} />}
+          </div>
         </section>
         <aside className="border-l border-[#d4ddd4] bg-[#f8faf6] p-4 sm:p-5">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[#79867e]">
+              <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[var(--studio-muted)]">
                 Live audit
               </p>
               <h2 className="mt-1 text-lg font-bold">Calculated issues</h2>
@@ -461,7 +527,7 @@ export function ClearPathStudio() {
           </Button>
           {!!session.alternatives.length && (
             <div className="mt-4 space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#79867e]">
+              <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[var(--studio-muted)]">
                 Ranked alternatives
               </p>
               {session.alternatives.map((proposal, index) => (
@@ -480,7 +546,7 @@ export function ClearPathStudio() {
                     <span>Option {index + 1}</span>
                     <ProposalStatusBadge status={proposal.status} />
                   </div>
-                  <p className="mt-2 text-[10px] text-[#718078]">
+                  <p className="mt-2 text-[10px] text-[var(--studio-muted)]">
                     {proposal.changes.map(describeChange).join(' · ')}
                   </p>
                   <p className="mt-1 text-[10px] font-semibold text-[#3f5948]">
@@ -498,7 +564,7 @@ export function ClearPathStudio() {
           >
             {announcement}
           </output>
-          <p className="mt-4 text-xs leading-5 text-[#87938b]">
+          <p className="mt-4 text-xs leading-5 text-[var(--studio-subtle)]">
             Planning heuristic only. ClearPath does not certify legal
             compliance; thresholds vary by jurisdiction.
           </p>
@@ -511,7 +577,7 @@ export function ClearPathStudio() {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-[#d5dfd4] bg-white p-3">
-      <p className="text-[10px] text-[#758179]">{label}</p>
+      <p className="text-[10px] text-[var(--studio-muted)]">{label}</p>
       <p className="mt-1 text-lg font-bold">{value}</p>
     </div>
   );
@@ -562,7 +628,7 @@ function IssueCard({
           {issue.severity}
         </Badge>
       </div>
-      <p className="mt-1 text-[10px] leading-4 text-[#718078]">
+      <p className="mt-1 text-[10px] leading-4 text-[var(--studio-muted)]">
         {issue.description}
       </p>
     </button>
@@ -595,7 +661,8 @@ function PlanCanvas({
       </div>
       <div className="bg-[linear-gradient(#e6ece5_1px,transparent_1px),linear-gradient(90deg,#e6ece5_1px,transparent_1px)] bg-[size:24px_24px] p-3">
         <svg
-          viewBox="0 0 900 600"
+          viewBox={`0 0 ${plan.width} ${plan.height}`}
+          role="img"
           aria-labelledby="plan-title plan-description"
           className="h-auto w-full"
         >
@@ -672,6 +739,7 @@ function PlanCanvas({
             return (
               <g
                 key={object.id}
+                role="img"
                 aria-label={`${object.name}${removed ? ', removed from usable layout' : moved ? ', moved in staged proposal' : ''}`}
               >
                 {moved && (
@@ -802,7 +870,7 @@ function CompareView({
         <div>
           <Eye className="mx-auto size-8 text-[#668071]" />
           <h2 className="mt-4 text-xl font-bold">Nothing staged</h2>
-          <p className="mt-2 text-xs text-[#718078]">
+          <p className="mt-2 text-xs text-[var(--studio-muted)]">
             Generate alternatives and stage one to compare exact
             geometry-derived results.
           </p>
@@ -818,7 +886,7 @@ function CompareView({
     <div className="min-h-[480px] rounded-[20px] border border-[#ccd8cc] bg-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.13em] text-[#748178]">
+          <p className="text-[10px] font-bold uppercase tracking-[.13em] text-[var(--studio-muted)]">
             Human approval gate
           </p>
           <h2 className="mt-1 text-xl font-bold">
@@ -870,7 +938,9 @@ function CompareView({
         <p>
           {capacityDelta < 0
             ? `${Math.abs(capacityDelta)} seats removed; final capacity ${proposal.after.metrics.capacity}.`
-            : 'No capacity loss.'}
+            : capacityDelta > 0
+              ? `${capacityDelta} seats restored; final capacity ${proposal.after.metrics.capacity}.`
+              : 'No capacity change.'}
         </p>
         <p className="mt-2 font-bold text-[#273b2f]">Search rationale</p>
         <p>{proposal.explanation}</p>
@@ -910,23 +980,23 @@ function MetricPanel({
       <p className="text-xs font-bold">{title}</p>
       <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
         <div>
-          <dt className="text-[#78857d]">Score</dt>
+          <dt className="text-[var(--studio-muted)]">Score</dt>
           <dd className="text-xl font-bold">{metrics.score}</dd>
         </div>
         <div>
-          <dt className="text-[#78857d]">Centered clear width</dt>
+          <dt className="text-[var(--studio-muted)]">Centered clear width</dt>
           <dd className="text-xl font-bold">
             {metrics.minimumClearWidthCm} cm
           </dd>
         </div>
         <div>
-          <dt className="text-[#78857d]">Critical / review</dt>
+          <dt className="text-[var(--studio-muted)]">Critical / review</dt>
           <dd className="font-bold">
             {metrics.criticalIssues} / {metrics.reviewIssues}
           </dd>
         </div>
         <div>
-          <dt className="text-[#78857d]">Capacity</dt>
+          <dt className="text-[var(--studio-muted)]">Capacity</dt>
           <dd className="font-bold">{metrics.capacity}</dd>
         </div>
       </dl>
@@ -939,7 +1009,7 @@ function HistoryView({ session }: { session: PlanningSession }) {
       <div className="flex items-center gap-3">
         <History className="size-5 text-[#397352]" />
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.13em] text-[#748178]">
+          <p className="text-[10px] font-bold uppercase tracking-[.13em] text-[var(--studio-muted)]">
             Immutable event records
           </p>
           <h2 className="text-xl font-bold">Human-agent audit trail</h2>
@@ -956,10 +1026,10 @@ function HistoryView({ session }: { session: PlanningSession }) {
                 {event.actor} · {event.result}
               </Badge>
             </div>
-            <p className="mt-1 text-[10px] leading-4 text-[#718078]">
+            <p className="mt-1 text-[10px] leading-4 text-[var(--studio-muted)]">
               {event.summary}
             </p>
-            <p className="mt-2 text-[9px] text-[#8a958e]">
+            <p className="mt-2 text-[9px] text-[var(--studio-subtle)]">
               {event.beforeVersionId ?? '—'} → {event.afterVersionId ?? '—'} ·{' '}
               {new Date(event.timestamp).toLocaleString()}
             </p>

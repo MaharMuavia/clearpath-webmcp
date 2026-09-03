@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_SEARCH_LIMITS,
+  SCORE_WEIGHTS,
   THRESHOLDS,
   auditPlan,
   createClassroomPlan,
@@ -40,6 +42,32 @@ function coordinatedFixture(): FloorPlan {
 }
 
 describe('computational geometry', () => {
+  it('pins every documented threshold, score weight, and search bound', () => {
+    expect(THRESHOLDS).toEqual({
+      requiredClearWidthCm: 90,
+      routeClearanceCm: 90,
+      routeHalfWidthCm: 45,
+      turningDiameterCm: 150,
+      criticalClearWidthCm: 60,
+    });
+    expect(SCORE_WEIGHTS).toEqual({
+      initial: 100,
+      criticalIssue: 22,
+      reviewIssue: 10,
+      clearWidthDeficitPerCm: 0.25,
+      changedObject: 2,
+      lostSeat: 4,
+      minimum: 0,
+      maximum: 100,
+    });
+    expect(DEFAULT_SEARCH_LIMITS).toEqual({
+      maxDepth: 4,
+      beamWidth: 72,
+      maxCandidatesPerObject: 7,
+      maxEvaluatedStates: 1500,
+    });
+  });
+
   it('detects crossing and collinear segment intersection', () => {
     expect(
       segmentsIntersect(
@@ -257,6 +285,27 @@ describe('plan validation and audit zones', () => {
       { x: 420, y: 130 },
     );
     expect(isValidPlan(overlap)).toBe(false);
+
+    const destinationOverlap = createClassroomPlan();
+    Object.assign(
+      destinationOverlap.objects.find((object) => object.id === 'desk-1')!,
+      { x: 300, y: 40 },
+    );
+    expect(validatePlan(destinationOverlap).errors).toContain(
+      'presentation-wall overlaps desk-1.',
+    );
+  });
+
+  it('uses one rounded clear width for the issue and minimum metric', () => {
+    const plan = createClassroomPlan();
+    plan.objects.find((object) => object.id === 'desk-3')!.x = 599.6;
+    const audit = auditPlan(plan);
+    const issue = audit.issues.find(
+      (candidate) => candidate.id === 'route-corridor:desk-3',
+    );
+    expect(issue?.measuredCm).toBe(21);
+    expect(audit.metrics.minimumClearWidthCm).toBe(21);
+    expect(issue?.measuredCm).toBe(audit.metrics.minimumClearWidthCm);
   });
 
   it('excludes inactive objects from capacity, collisions, and route conflicts', () => {
@@ -274,6 +323,20 @@ describe('plan validation and audit zones', () => {
 });
 
 describe('proposal context fingerprints', () => {
+  it('hashes complete Unicode code points into a 32-bit fingerprint', () => {
+    const first = createClassroomPlan();
+    const second = createClassroomPlan();
+    first.name = 'North Hall 😀';
+    second.name = 'North Hall 😁';
+    const firstFingerprint = proposalContextFingerprint(first, {
+      minimumCapacity: 24,
+    });
+    expect(firstFingerprint).toMatch(/^ctx-[0-9a-f]{8}$/);
+    expect(firstFingerprint).not.toBe(
+      proposalContextFingerprint(second, { minimumCapacity: 24 }),
+    );
+  });
+
   it.each([
     ['plan ID', (plan: FloorPlan) => void (plan.id += '-changed')],
     ['version', (plan: FloorPlan) => void (plan.versionId += '-changed')],
@@ -330,9 +393,109 @@ describe('proposal context fingerprints', () => {
 });
 
 describe('bounded proposal search', () => {
+  it('pins every documented classroom fixture metric and ranked proposal', () => {
+    const plan = createClassroomPlan();
+    const baseline = auditPlan(plan, plan);
+    expect(baseline.metrics).toEqual({
+      score: 61,
+      capacity: 24,
+      openIssues: 1,
+      criticalIssues: 1,
+      reviewIssues: 0,
+      minimumCenterlineClearanceCm: 10,
+      minimumClearWidthCm: 20,
+      minimumClearanceCm: 20,
+      routeLengthCm: 1048,
+      changedObjects: 0,
+      movedObjects: 0,
+    });
+    expect(baseline.issues).toHaveLength(1);
+    expect(baseline.issues[0]).toMatchObject({
+      id: 'route-corridor:desk-3',
+      severity: 'critical',
+      measuredCm: 20,
+    });
+
+    const proposals = generateRouteAlternatives(
+      plan,
+      { minimumCapacity: 24 },
+      3,
+    );
+    expect(
+      proposals.map(({ id, status, after, changes }) => ({
+        id,
+        status,
+        capacity: after.metrics.capacity,
+        score: after.metrics.score,
+        minimumClearWidthCm: after.metrics.minimumClearWidthCm,
+        changes,
+      })),
+    ).toEqual([
+      {
+        id: 'proposal-desk-3-move-530-130',
+        status: 'threshold-satisfied',
+        capacity: 24,
+        score: 98,
+        minimumClearWidthCm: 90,
+        changes: [
+          {
+            type: 'move',
+            objectId: 'desk-3',
+            objectName: 'Desk 3',
+            from: { x: 600, y: 130 },
+            to: { x: 530, y: 130 },
+            distanceCm: 70,
+          },
+        ],
+      },
+      {
+        id: 'proposal-desk-3-move-710-430',
+        status: 'threshold-satisfied',
+        capacity: 24,
+        score: 98,
+        minimumClearWidthCm: 90,
+        changes: [
+          {
+            type: 'move',
+            objectId: 'desk-3',
+            objectName: 'Desk 3',
+            from: { x: 600, y: 130 },
+            to: { x: 710, y: 430 },
+            distanceCm: 320,
+          },
+        ],
+      },
+      {
+        id: 'proposal-desk-3-move-760-130',
+        status: 'partial-improvement',
+        capacity: 24,
+        score: 88,
+        minimumClearWidthCm: 90,
+        changes: [
+          {
+            type: 'move',
+            objectId: 'desk-3',
+            objectName: 'Desk 3',
+            from: { x: 600, y: 130 },
+            to: { x: 760, y: 130 },
+            distanceCm: 160,
+          },
+        ],
+      },
+    ]);
+  });
+
   it('finds a full-capacity threshold-satisfied fixture proposal', () => {
     const plan = createClassroomPlan();
     const top = generateRouteAlternatives(plan, { minimumCapacity: 24 }, 3)[0];
+    expect(top.changes[0]).toEqual({
+      type: 'move',
+      objectId: 'desk-3',
+      objectName: 'Desk 3',
+      from: { x: 600, y: 130 },
+      to: { x: 530, y: 130 },
+      distanceCm: 70,
+    });
     expect(top.status).toBe('threshold-satisfied');
     expect(top.after.metrics).toMatchObject({
       capacity: 24,
@@ -406,6 +569,12 @@ describe('bounded proposal search', () => {
       (proposal) => proposal.after.metrics.capacity === 22,
     )!;
     expect(removal).toBeDefined();
+    expect(removal.after.metrics).toMatchObject({
+      score: 90,
+      capacity: 22,
+      changedObjects: 1,
+      movedObjects: 0,
+    });
     expect(removal.changes.some((change) => change.type === 'remove')).toBe(
       true,
     );
