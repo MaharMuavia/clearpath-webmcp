@@ -2,7 +2,7 @@
 
 ## 0:00–0:15 — Establish the problem
 
-Open `/studio` on the blocked North Hall classroom. Point to the measured issue list, 0 cm minimum clear width, and the route/required zones drawn from the same model.
+Open `/studio` on the North Hall classroom. Point to the three measured corridor intrusions, 25 cm minimum centreline clearance, 50 cm centred clear width, and the route/required zones drawn from the same model.
 
 Say: “ClearPath is an accessibility planning aid. This is calculated geometry, not a scripted score and not legal certification.”
 
@@ -24,11 +24,11 @@ Briefly show `get_plan_geometry`. Emphasize that object identity, centimetre coo
 
 ## 0:55–1:15 — Add human constraints
 
-In the visible UI, lock Desk 2 and leave required capacity at 24. Then prompt:
+In the visible UI, lock Desk 8 and leave required capacity at 24. Then prompt:
 
 > Respect my current locks and all 24 seats. Generate the two best route alternatives.
 
-Show two different `generate_route_alternatives` results. Point out different movement coordinates, objective explanations, and trade-offs—not just differently worded copies.
+Show two different `generate_route_alternatives` results. Point out the **Threshold satisfied** status, different change coordinates, search rationale, and trade-offs—not just differently worded copies.
 
 ## 1:15–1:40 — Stage and compare
 
@@ -36,7 +36,7 @@ Prompt:
 
 > Stage the highest-ranked alternative and compare it with the committed version.
 
-Show the ghost rectangles at original positions and proposed objects at their generated coordinates. Show `compare_plan_versions`: before/after metrics, deltas, exact movements, resolved/remaining issues, preserved constraints, and trade-offs.
+Show the ghost rectangles at original positions and proposed objects at their generated coordinates. Show `compare_plan_versions`: before/after metrics, proposal status, exact changes, resolved/remaining issues, preserved constraints, and trade-offs.
 
 ## 1:40–2:00 — Human approval gate
 

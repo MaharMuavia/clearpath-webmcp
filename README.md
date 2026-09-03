@@ -1,10 +1,12 @@
 # ClearPath
 
+[![CI](https://github.com/MaharMuavia/clearpath-webmcp/actions/workflows/ci.yml/badge.svg)](https://github.com/MaharMuavia/clearpath-webmcp/actions/workflows/ci.yml)
+
 **ClearPath is a WebMCP-native accessibility planning studio that audits real floor-plan geometry, searches constraint-safe layout alternatives, and keeps every change human-approved and undoable.**
 
 [Open the live application](https://clearpath-access.hanzlakhan2266.chatgpt.site) · [Launch the studio](https://clearpath-access.hanzlakhan2266.chatgpt.site/studio)
 
-![ClearPath social preview](public/og.png)
+![Current ClearPath geometry studio](public/studio.png)
 
 ## Why WebMCP is essential
 
@@ -29,7 +31,7 @@ The application remains fully usable in browsers without WebMCP.
 ```text
 Typed classroom geometry
   ├─ deterministic audit + heuristic score
-  ├─ bounded movement search + constraint validation
+  ├─ bounded beam search + lexicographic ranking
   ├─ model-driven SVG + comparison UI
   ├─ versioned session + immutable audit events
   └─ studio-only WebMCP imperative tools
@@ -44,7 +46,7 @@ Typed classroom geometry
 
 The model uses centimetres and includes plan bounds, walls, route points, objects, rotations, locks, capacity contributions, a 150 cm turning zone, and an entrance approach/recovery zone.
 
-The audit calculates segment/rectangle intersection, segment/rectangle distance, circle/rectangle overlap, rectangle overlap, route length, capacity, open issues, severities, and moved-object count. Every visible metric is recalculated from the visible plan.
+The audit calculates segment/rectangle intersection, centreline-to-obstacle distance, centred available clear width, wall clearance, circle/rectangle overlap, rectangle overlap, route length, active capacity, and changed-object count. Every visible metric is recalculated from the visible plan. It reports every object intruding into the required corridor, even when the object does not intersect the route centreline.
 
 The explainable planning heuristic starts at 100 and subtracts:
 
@@ -56,11 +58,11 @@ The explainable planning heuristic starts at 100 and subtracts:
 
 Scores are clamped to 0–100. This is a planning heuristic, not legal certification. Requirements vary by jurisdiction.
 
-Proposal generation searches bounded 60/120/180 cm moves for geometry-implicated movable objects. Candidates must preserve locks and requested capacity, remain inside bounds, avoid object overlap, and improve the audit. Ranking rewards score and critical-conflict improvement while penalizing move count and distance.
+Proposal generation uses a deterministic beam search over geometry-implicated movable objects, bounded candidate positions, explicit desk-removal and restoration candidates, incremental validation, duplicate-state elimination, a maximum depth of four changes, a beam width of 72, and a 1,500-state evaluation cap. It ranks lexicographically: route blockers, required clear width, other critical conflicts, review issues, required capacity, changed-object count, movement distance, then route length. A proposal is labelled **Threshold satisfied** only when it has zero critical issues, reaches the 90 cm planning threshold, and preserves the configured capacity; all other useful results are labelled **Partial improvement**.
 
 ## WebMCP tools
 
-Tools register only on `/studio`. `apply_staged_plan` registers only while a current proposal is staged and opens a human approval gate; it does not silently commit geometry.
+Tools register only on `/studio`. Generation-dependent, staged-plan, and undo tools register only while their corresponding state exists. `apply_staged_plan` records an agent approval request and opens the human approval gate; it never commits geometry.
 
 | Tool | Mode | Purpose |
 | --- | --- | --- |
@@ -71,7 +73,7 @@ Tools register only on `/studio`. `apply_staged_plan` registers only while a cur
 | `set_planning_constraints` | Mutate | Set minimum capacity and invalidate stale proposals |
 | `generate_route_alternatives` | Mutate | Run bounded deterministic search |
 | `stage_route_proposal` | Mutate | Stage a proposal without changing committed geometry |
-| `compare_plan_versions` | Read | Before/after metrics, deltas, movements, issues, and trade-offs |
+| `compare_plan_versions` | Read | Before/after metrics, status, exact move/removal/restoration changes, issues, and trade-offs |
 | `apply_staged_plan` | Approval request | Open the visible human approval gate; never commits silently |
 | `reject_staged_plan` | Mutate | Reject the staged proposal exactly |
 | `undo_plan_change` | Mutate | Restore the prior committed geometry |
@@ -84,14 +86,14 @@ All schemas use `additionalProperties: false`; inputs are validated again inside
 - Locked objects never move.
 - Capacity, boundaries, and object overlap are hard constraints.
 - Failed searches do not mutate current state.
-- Proposal IDs are bound to a committed baseline version; stale/rejected IDs cannot apply.
+- Proposal IDs are bound to a deterministic fingerprint of geometry, version, locks, capacity constraint, and thresholds; stale/rejected IDs cannot stage or apply.
 - Agent apply calls only request visible human approval.
 - Apply stores the exact prior plan; undo restores it rather than reconstructing it.
 - Real audit events record actor, action, plan/proposal IDs, versions, result, and timestamp.
 
 ## Evaluation
 
-The checked evaluation contains 10 natural-language prompts with expected tool selection and recorded results: [EVALUATION.md](EVALUATION.md). Current result: **10/10 contract scenarios pass**. Chromium workflow coverage: **6/6 tests pass**.
+The checked evaluation separates automated WebMCP contract coverage from native ChatGPT selection: [EVALUATION.md](EVALUATION.md). Native natural-language verification remains pending until run in ChatGPT's WebMCP host.
 
 ## Local setup
 
@@ -112,7 +114,7 @@ npm run lint
 npm test
 npm run test:e2e
 npm run build
-npm audit
+npm audit --audit-level=high
 ```
 
 CI runs type checking, lint, unit/integration tests, build, and Chromium end-to-end tests on pushes and pull requests.
@@ -128,7 +130,7 @@ CI runs type checking, lint, unit/integration tests, build, and Chromium end-to-
 ## Demo prompts
 
 1. `Audit the current access route and focus the most severe measured issue.`
-2. `Lock Desk 2, require all 24 seats, and generate the two best route alternatives.`
+2. `I have locked Desk 8 in the visible interface. Preserve my current locks and all 24 seats, then generate the two best alternatives.`
 3. `Stage the highest-ranked alternative and compare exact before-and-after metrics and coordinates.`
 4. `Request approval for the staged plan, but do not commit anything without my visible approval.`
 5. `Show the audit history, then undo the last approved plan change.`
