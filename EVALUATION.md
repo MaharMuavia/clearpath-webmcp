@@ -18,7 +18,7 @@ Date: 2026-09-03. Automated evaluation uses the imperative `document.modelContex
 ## Automated evidence
 
 - Vitest: 3 files, 61 tests passing locally.
-- Chromium: 8 mock-host browser workflows passing locally in 51.9 seconds.
+- Chromium mock-host workflows are covered in source and must be rerun against the exact final revision; timing is environment-dependent.
 - Landing-page tool absence and studio-only tool registration: passing.
 - Dynamic `apply_staged_plan` lifecycle: passing.
 - Unsupported/no-WebMCP human workflow: passing.

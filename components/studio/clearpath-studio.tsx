@@ -70,7 +70,7 @@ function Badge({
   return (
     <span
       {...props}
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold ${variant === 'outline' ? 'border border-[#cad6ca] bg-white' : ''} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold ${variant === 'outline' ? 'border border-[#cad6ca] bg-white' : ''} ${className}`}
     />
   );
 }
@@ -261,7 +261,7 @@ export function ClearPathStudio() {
           <div>
             <div className="flex items-center gap-2 font-bold">
               ClearPath{' '}
-              <Badge className="bg-[#e8f6c9] text-[9px] text-[#315c22]">
+              <Badge className="bg-[#e8f6c9] text-xs text-[#315c22]">
                 WebMCP
               </Badge>
             </div>
@@ -498,7 +498,7 @@ export function ClearPathStudio() {
           >
             {announcement}
           </output>
-          <p className="mt-4 text-[9px] leading-4 text-[#87938b]">
+          <p className="mt-4 text-xs leading-5 text-[#87938b]">
             Planning heuristic only. ClearPath does not certify legal
             compliance; thresholds vary by jurisdiction.
           </p>

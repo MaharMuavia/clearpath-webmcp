@@ -237,9 +237,9 @@ export function buildToolDefinitions(
     },
     {
       name: 'generate_route_alternatives',
-      title: 'Generate route alternatives',
+      title: 'Generate route-clearance layout alternatives',
       description:
-        'Available in the studio. Run bounded deterministic geometry search under current locks and capacity; this generates reviewable proposals but does not commit geometry.',
+        'Available in the studio. Run bounded deterministic geometry search under current locks and capacity. Furniture changes clear the selected fixed route; route geometry remains fixed in this version. Results are reviewable proposals and never commit geometry.',
       inputSchema: {
         type: 'object',
         properties: {},

@@ -28,7 +28,7 @@ Tools use the current imperative `document.modelContext.registerTool()` interfac
 - Bounded ranked proposal search with hard constraints.
 - Exact committed/staged versions, stale-ID rejection, real events, and exact undo.
 - 61 unit/contract tests and 8 Chromium mock-host workflows passing locally.
-- CI is configured for type checking, lint, tests, build, and browser workflows; CI for the final working tree is pending commit/push.
+- CI is configured for type checking, lint, tests, build, and browser workflows. The final revision is committed locally; CI and deployment identifiers must be recorded from their actual runs before submission.
 - `npm audit` reports zero vulnerabilities after compatible upgrades.
 
 ## Scope and disclaimer

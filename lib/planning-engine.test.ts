@@ -365,6 +365,35 @@ describe('bounded proposal search', () => {
       );
   });
 
+  it('returns two distinct issue-free full-capacity classroom alternatives', () => {
+    const proposals = generateRouteAlternatives(createClassroomPlan(), { minimumCapacity: 24 }, 10);
+    const successful = proposals.filter((proposal) => proposal.status === 'threshold-satisfied');
+    expect(successful.length).toBeGreaterThanOrEqual(2);
+    expect(successful.slice(0, 2).every((proposal) => proposal.after.metrics.capacity === 24)).toBe(true);
+    expect(successful.slice(0, 2).every((proposal) => proposal.remainingIssueIds.length === 0)).toBe(true);
+    expect(new Set(successful.slice(0, 2).map((proposal) => JSON.stringify(proposal.changes))).size).toBe(2);
+  });
+
+  it('treats required-zone conflicts as partial improvements', () => {
+    const plan = createClassroomPlan();
+    const desk = plan.objects.find((object) => object.id === 'desk-3')!;
+    desk.x = 760;
+    desk.y = 130;
+    const audit = auditPlan(plan, plan);
+    expect(audit.issues.some((issue) => issue.type === 'turning-zone')).toBe(true);
+    expect(generateRouteAlternatives(createClassroomPlan(), { minimumCapacity: 24 }, 10)
+      .some((proposal) => proposal.status === 'partial-improvement' && proposal.remainingIssueIds.some((id) => id.startsWith('turning-zone:')))).toBe(true);
+  });
+
+  it('enforces minimum furniture separation and search limits', () => {
+    const plan = createClassroomPlan();
+    const desk = plan.objects.find((object) => object.id === 'desk-3')!;
+    desk.x = 520;
+    expect(isValidPlan(plan)).toBe(false);
+    expect(() => generateRouteAlternatives(createClassroomPlan(), { minimumCapacity: 24 }, 3, { maxDepth: 0 })).toThrow('maxDepth');
+    expect(() => generateRouteAlternatives(createClassroomPlan(), { minimumCapacity: 24 }, 0)).toThrow('Proposal limit');
+  });
+
   it('preserves capacity by default even when the minimum is lower', () => {
     const plan = createClassroomPlan();
     const at24 = generateRouteAlternatives(plan, { minimumCapacity: 24 }, 3);

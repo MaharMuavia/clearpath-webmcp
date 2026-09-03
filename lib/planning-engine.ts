@@ -135,6 +135,7 @@ export const THRESHOLDS = {
   turningDiameterCm: 150,
   criticalClearWidthCm: 60,
 } as const;
+export const MIN_FURNITURE_SEPARATION_CM = 10;
 export const DEFAULT_SEARCH_LIMITS: SearchLimits = {
   maxDepth: 4,
   beamWidth: 72,
@@ -354,6 +355,14 @@ export function rectsOverlap(a: Rect, b: Rect): boolean {
     a.y < b.y + b.height &&
     a.y + a.height > b.y
   );
+}
+function expandRect(rect: Rect, padding: number): Rect {
+  return {
+    x: rect.x - padding,
+    y: rect.y - padding,
+    width: rect.width + padding * 2,
+    height: rect.height + padding * 2,
+  };
 }
 export function circleOverlapsRect(
   center: Point,
@@ -669,6 +678,9 @@ export function validatePlan(
   lockedReference?: FloorPlan,
 ): PlanValidationResult {
   const errors: string[] = [];
+  if (typeof plan.id !== 'string' || !plan.id.trim()) errors.push('Plan ID must be non-empty.');
+  if (typeof plan.versionId !== 'string' || !plan.versionId.trim()) errors.push('Plan version ID must be non-empty.');
+  if (plan.unit !== 'cm') errors.push('Plan unit must be cm.');
   if (!Number.isFinite(plan.width) || plan.width <= 0)
     errors.push('Plan width must be a positive finite number.');
   if (!Number.isFinite(plan.height) || plan.height <= 0)
@@ -699,11 +711,17 @@ export function validatePlan(
   );
   if (terminalDestinations.length !== 1)
     errors.push('Plan must contain exactly one active physical destination.');
-  else if (!hasValidTerminalDestinationContact(plan, terminalDestinations[0]))
-    errors.push(
-      'Route must make perpendicular terminal contact with the physical destination boundary.',
-    );
+  else {
+    if (!terminalDestinations[0].locked)
+      errors.push('The active physical destination must remain locked.');
+    if (!hasValidTerminalDestinationContact(plan, terminalDestinations[0]))
+      errors.push(
+        'Route must make perpendicular terminal contact with the physical destination boundary.',
+      );
+  }
 
+  for (const duplicate of duplicateIds(plan.walls))
+    errors.push(`Duplicate wall ID: ${duplicate}.`);
   for (const duplicate of duplicateIds(plan.objects))
     errors.push(`Duplicate object ID: ${duplicate}.`);
   for (const duplicate of duplicateIds([
@@ -713,6 +731,8 @@ export function validatePlan(
     errors.push(`Duplicate zone ID: ${duplicate}.`);
 
   for (const object of plan.objects) {
+    if (typeof object.id !== 'string' || !object.id.trim()) errors.push('Object ID must be non-empty.');
+    if (typeof object.name !== 'string' || !object.name.trim()) errors.push(`${object.id || 'Object'} name must be non-empty.`);
     if (!isFinitePoint(object))
       errors.push(`${object.id} coordinates must be finite.`);
     if (
@@ -741,10 +761,15 @@ export function validatePlan(
   const active = plan.objects.filter((object) => object.active);
   for (let index = 0; index < active.length; index += 1)
     for (const other of active.slice(index + 1))
-      if (rectsOverlap(active[index], other))
+      if (
+        active[index].kind !== 'destination' &&
+        other.kind !== 'destination' &&
+        rectsOverlap(expandRect(active[index], MIN_FURNITURE_SEPARATION_CM / 2), expandRect(other, MIN_FURNITURE_SEPARATION_CM / 2))
+      )
         errors.push(`${active[index].id} overlaps ${other.id}.`);
 
-  for (const wall of plan.walls)
+  for (const wall of plan.walls) {
+    if (typeof wall.id !== 'string' || !wall.id.trim()) errors.push('Wall ID must be non-empty.');
     if (
       !isFinitePoint(wall.start) ||
       !isFinitePoint(wall.end) ||
@@ -756,6 +781,7 @@ export function validatePlan(
       );
     else if (pointsEqual(wall.start, wall.end))
       errors.push(`${wall.id} must have two distinct endpoints.`);
+  }
   for (const zone of plan.doorZones)
     if (
       !isFinitePoint(zone) ||
@@ -946,6 +972,9 @@ function candidateChanges(
   allowRemoval: boolean,
 ): PlanChange[] {
   const offsets = [
+    [-70, 0],
+    [110, 300],
+    [160, 110],
     [-80, 0],
     [160, 0],
     [-100, 0],
@@ -1008,11 +1037,29 @@ function proposalStatus(
   audit: AuditResult,
   constraints: PlanningConstraints,
 ): ProposalStatus {
-  return audit.metrics.criticalIssues === 0 &&
-    audit.metrics.minimumClearWidthCm >= THRESHOLDS.requiredClearWidthCm &&
-    audit.metrics.capacity >= constraints.minimumCapacity
+  return satisfiesPlanningThresholds(audit, constraints)
     ? 'threshold-satisfied'
     : 'partial-improvement';
+}
+
+export function satisfiesPlanningThresholds(
+  audit: AuditResult,
+  constraints: PlanningConstraints,
+): boolean {
+  return (
+    audit.issues.length === 0 &&
+    audit.metrics.criticalIssues === 0 &&
+    audit.metrics.minimumClearWidthCm >= THRESHOLDS.requiredClearWidthCm &&
+    audit.metrics.capacity >= constraints.minimumCapacity
+  );
+}
+
+function resolveSearchLimits(searchLimits: Partial<SearchLimits>): SearchLimits {
+  const limits = { ...DEFAULT_SEARCH_LIMITS, ...searchLimits };
+  for (const [name, value] of Object.entries(limits))
+    if (!Number.isInteger(value) || value <= 0)
+      throw new Error(`${name} must be a positive whole number.`);
+  return limits;
 }
 
 export function generateRouteAlternatives(
@@ -1039,7 +1086,9 @@ export function generateRouteAlternatives(
     throw new Error(
       `Proposal generation requires a structurally valid baseline plan: ${validation.errors.join(' ')}`,
     );
-  const limits = { ...DEFAULT_SEARCH_LIMITS, ...searchLimits };
+  if (!Number.isInteger(limit) || limit <= 0)
+    throw new Error('Proposal limit must be a positive whole number.');
+  const limits = resolveSearchLimits(searchLimits);
   const before = auditPlan(plan, plan);
   const contextFingerprint = proposalContextFingerprint(plan, constraints);
   const problematic = [

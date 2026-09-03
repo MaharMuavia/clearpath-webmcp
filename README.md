@@ -124,7 +124,7 @@ npm audit --audit-level=high
 
 CI runs type checking, lint, unit/integration tests, build, and Chromium end-to-end tests on pushes and pull requests.
 
-Current local evidence: 61 Vitest unit/contract tests and 8 Chromium mock-host workflows pass. Native ChatGPT tool selection, the deployed revision, and CI for the final uncommitted working tree remain pending manual verification.
+Current local evidence: 64 Vitest unit/contract tests pass. Chromium mock-host execution, native ChatGPT tool selection, deployment, and CI for the final revision require environment-specific verification; mock-host results must not be treated as native-host evidence.
 
 ## Limitations
 
@@ -137,7 +137,7 @@ Current local evidence: 61 Vitest unit/contract tests and 8 Chromium mock-host w
 ## Demo prompts
 
 1. `Audit the current access route and focus the most severe measured issue.`
-2. `I have locked Desk 8 in the visible interface. Preserve my current locks and all 24 seats, then generate the two best alternatives.`
+2. `I have locked Desk 3 in the visible interface. Preserve my current locks and all 24 seats, then generate the two best route-clearance layout alternatives.`
 3. `Stage the highest-ranked alternative and compare exact before-and-after metrics and coordinates.`
 4. `Request approval for the staged plan, but do not commit anything without my visible approval.`
 5. `Show the audit history, then undo the last approved plan change.`
