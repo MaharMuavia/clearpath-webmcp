@@ -26,15 +26,71 @@ Date: 2026-09-04. Automated evaluation uses the imperative `document.modelContex
 
 The public deployment was verified on 2026-09-04 against source commit `8e323b019acb0d774c03d63497bea32691efb0ac`.
 
+## Deployed-build verification (mock host)
+
+The checks in this section were run on 2026-09-04 against the **live deployment** at
+`https://clearpath-access.hanzlakhan2266.chatgpt.site`, not against a local development server.
+They close a specific gap: the Chromium workflows above exercise `npm run dev` on localhost, so
+until now nothing confirmed that the built and deployed bundle registers and behaves identically.
+
+Method and its limits, stated plainly: the testing browser did not expose `document.modelContext`
+(WebMCP was unavailable), so a mock host was installed on the page and each tool's `execute` was
+invoked directly by name. **This is mock-host evidence against the deployed build. It is not
+native-host evidence, and it says nothing about whether an agent selects the correct tool from
+natural language** — that remains the first row of the next section.
+
+| Deployed-build check | Observed |
+| --- | --- |
+| Tool registration on `/studio` | 7 base tools |
+| Tool registration on `/` | 0 tools |
+| Dynamic surface after `generate_route_alternatives` | 9 tools (`stage_route_proposal`, `compare_plan_versions` appear) |
+| Dynamic surface while staged | 11 tools (`apply_staged_plan`, `reject_staged_plan` appear) |
+| Baseline metrics | score 61, 20 cm centred clear width, 24 seats, 1,048 cm route, one critical `route-corridor:desk-3` |
+| Top proposal | `desk-3` (600, 130) → (530, 130), 70 cm, 90 cm clear width, 24 seats, score 98, threshold-satisfied |
+| Committed version after staging | unchanged at `north-hall-v1` |
+| Agent `apply_staged_plan` | returned `approvalRequired: true`, `committed: false`; committed version **unchanged** at `north-hall-v1` |
+| Human approval click | committed advanced to `north-hall-v1-proposal-desk-3-move-530-130`; score 98, 90 cm, 0 open issues |
+| `undo_plan_change` | restored `north-hall-v1`; score 61, 20 cm, 24 seats |
+| Tool surface after undo | `undo_plan_change` withdrawn; 7 tools |
+
+Every figure above matches the values documented in `README.md`, recomputed by the deployed engine
+rather than read from a fixture.
+
+The audit trail recorded for that sequence was:
+
+```text
+system/plan_opened/successful
+human/object_locked/successful           (visible UI lock toggle)
+agent/alternatives_generated/successful  (tool call)
+agent/proposal_staged/successful         (tool call)
+agent/approval_requested/successful      (tool call)
+human/proposal_applied/successful        (visible approval button)
+agent/plan_change_undone/undone          (tool call)
+```
+
+Actor attribution is therefore correct in the deployed build: UI-initiated actions record `human`,
+tool-initiated actions record `agent`, and only the visible approval button advanced the committed
+version.
+
+Tools not exercised in this deployed run, and still covered only by the local suites above:
+`get_plan_geometry`, `audit_access_routes`, `focus_audit_issue`, `set_planning_constraints`,
+`compare_plan_versions`, `reject_staged_plan`, and stale-proposal-ID rejection.
+
 ## Honest gaps
 
 Native ChatGPT tool discovery and selection remain untested in this environment. Rotated-object collision uses axis-aligned bounds, the planning thresholds are not jurisdiction-specific rules, and browser-local state is not multi-user persistence.
 
 ## Native ChatGPT/WebMCP verification
 
-The automated browser does not provide ChatGPT's native WebMCP host. These checks must be performed manually against the deployed build; all remain **pending manual verification**:
+No browser available in this environment provides ChatGPT's native WebMCP host, so none of the ten
+checks below has been run. They must be performed manually against the deployed build and all
+remain **pending manual verification**.
 
-The native host is unavailable in this environment, so none of the ten checks below was run.
+These are deliberately not inferred from the section above. The deployed-build results show that the
+shipped application registers the expected tools and enforces the approval boundary when a host
+calls `execute` — so if a native host shows no tools, that points at host availability or
+enablement rather than at application behaviour. It does **not** establish that ChatGPT discovers
+the tools or selects the right one from natural language, which is what these rows measure.
 
 | Check                                          | Result                      |
 | ---------------------------------------------- | --------------------------- |
