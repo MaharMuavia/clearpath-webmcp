@@ -1,6 +1,6 @@
 # ClearPath WebMCP evaluation
 
-Date: 2026-09-03. Automated evaluation uses the imperative `document.modelContext` contract, calculated classroom fixture, Vitest contract tests, and mock-host Chromium workflows. “Pass” means direct tool execution and returned/visible state matched the expectation; it does not prove that ChatGPT selected the tool from natural language and does not mean legal accessibility certification.
+Date: 2026-09-04. Automated evaluation uses the imperative `document.modelContext` contract, calculated classroom fixture, Vitest contract tests, and mock-host Chromium workflows. “Pass” means direct tool execution and returned/visible state matched the expectation; it does not prove that ChatGPT selected the tool from natural language and does not mean legal accessibility certification.
 
 | #   | Scenario prompt                                                             | Expected tool selection                     | Automated contract result                                                                                                                                          | Outcome |
 | --- | --------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
@@ -24,15 +24,17 @@ Date: 2026-09-03. Automated evaluation uses the imperative `document.modelContex
 - Unsupported/no-WebMCP human workflow: passing.
 - Destination-aware clearance, terminal contact, plan diagnostics, full fingerprint invalidation, capacity-preserving ranking, explicit removal/restoration, runtime human-only commit, and narrow-layout actions: passing.
 
-CI for the final working tree has not run because the changes are not committed or pushed. The deployed URL has not been verified against this source revision.
+The public deployment was verified on 2026-09-04 against source commit `8e323b019acb0d774c03d63497bea32691efb0ac`.
 
 ## Honest gaps
 
-The public deployment still requires authorization and must be redeployed and re-verified. Native ChatGPT tool discovery and selection remain untested in this local environment. Rotated-object collision uses axis-aligned bounds, the planning thresholds are not jurisdiction-specific rules, and browser-local state is not multi-user persistence.
+Native ChatGPT tool discovery and selection remain untested in this environment. Rotated-object collision uses axis-aligned bounds, the planning thresholds are not jurisdiction-specific rules, and browser-local state is not multi-user persistence.
 
 ## Native ChatGPT/WebMCP verification
 
 The automated browser does not provide ChatGPT's native WebMCP host. These checks must be performed manually against the deployed build; all remain **pending manual verification**:
+
+The native host is unavailable in this environment, so none of the ten checks below was run.
 
 | Check                                          | Result                      |
 | ---------------------------------------------- | --------------------------- |

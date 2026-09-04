@@ -28,11 +28,11 @@ Tools use the current imperative `document.modelContext.registerTool()` interfac
 - Bounded ranked proposal search with hard constraints.
 - Exact committed/staged versions, stale-ID rejection, real events, and exact undo.
 - 76 unit/contract tests and 9 Chromium workflows passing locally.
-- CI is configured for type checking, lint, tests, build, and browser workflows. The final revision is committed locally; CI and deployment identifiers must be recorded from their actual runs before submission.
+- CI is configured for type checking, lint, tests, build, and browser workflows. The public deployment was verified on 2026-09-04 against source commit `8e323b019acb0d774c03d63497bea32691efb0ac`.
 - `npm audit` reports zero vulnerabilities after compatible upgrades.
 
 ## Scope and disclaimer
 
 The former clinic and café were removed because they did not contain independent geometry. One honest classroom scenario is stronger evidence than three scripted skins. ClearPath is a planning aid, not accessibility certification or a substitute for qualified local review.
 
-Native ChatGPT WebMCP selection and deployment of the final source revision remain pending manual verification and must be completed before these materials are submitted.
+Native ChatGPT WebMCP discovery and natural-language selection remain pending manual verification; mock-host results are not native-host evidence.

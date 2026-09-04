@@ -1,10 +1,10 @@
 # ClearPath
 
-> **BEFORE SUBMITTING:** Redeploy; re-verify both the root and `/studio` URLs return 200; re-verify CI is green on the pushed commit; and record the CI run URL.
-
 [![CI](https://github.com/MaharMuavia/clearpath-webmcp/actions/workflows/ci.yml/badge.svg)](https://github.com/MaharMuavia/clearpath-webmcp/actions/workflows/ci.yml)
 
 **ClearPath is a WebMCP-native accessibility planning studio that audits real floor-plan geometry, searches constraint-safe layout alternatives, and keeps every change human-approved and undoable.**
+
+[Open the deployed application](https://clearpath-access.hanzlakhan2266.chatgpt.site/) · [Launch the deployed studio](https://clearpath-access.hanzlakhan2266.chatgpt.site/studio)
 
 Run the application locally with `npm ci && npm run dev`.
 
@@ -113,7 +113,7 @@ Open the printed local URL. WebMCP is feature-detected; unsupported browsers use
 
 ## Deployment
 
-The configured deployment is not yet publicly reachable. Its root and `/studio` endpoints currently require authorization, so the deployment URL must be re-verified before submission. `metadataBase` remains configured to that intended production origin because there is no verified replacement origin yet.
+The public deployment is available at `https://clearpath-access.hanzlakhan2266.chatgpt.site`. The root and `/studio` endpoints were verified on 2026-09-04 against source commit `8e323b019acb0d774c03d63497bea32691efb0ac`.
 
 ## Verification
 
@@ -128,7 +128,7 @@ npm audit --audit-level=high
 
 CI runs type checking, lint, unit/integration tests, build, and Chromium end-to-end tests on pushes and pull requests.
 
-Current local evidence: 76 Vitest unit/contract tests and 9 Chromium workflows pass locally. Native ChatGPT tool selection, deployment, and CI for the final revision require environment-specific verification; mock-host results must not be treated as native-host evidence.
+Current local evidence: 76 Vitest unit/contract tests and 9 Chromium workflows pass locally. The public deployment was verified on 2026-09-04. Native ChatGPT tool selection remains pending; mock-host results must not be treated as native-host evidence.
 
 ## Limitations
 
@@ -149,7 +149,7 @@ Current local evidence: 76 Vitest unit/contract tests and 9 Chromium workflows p
 ## GitHub About settings
 
 - **Description:** `WebMCP-native accessibility planning with real geometry audits, constraint-safe proposals, human approval, and exact undo.`
-- **Homepage:** Leave unset until the deployment is publicly reachable and re-verified.
+- **Homepage:** `https://clearpath-access.hanzlakhan2266.chatgpt.site`
 - **Topics:** `webmcp`, `accessibility`, `computational-geometry`, `ai-agents`, `human-in-the-loop`, `nextjs`, `typescript`, `floor-plan`, `inclusive-design`, `hackathon`
 
 ## License
