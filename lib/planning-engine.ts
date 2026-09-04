@@ -125,7 +125,7 @@ export type AuditEvent = {
   summary: string;
   beforeVersionId?: string;
   afterVersionId?: string;
-  result: 'successful' | 'rejected' | 'failed' | 'undone';
+  result: 'successful' | 'rejected' | 'failed' | 'cancelled' | 'undone';
 };
 
 export const THRESHOLDS = {
@@ -136,6 +136,16 @@ export const THRESHOLDS = {
   criticalClearWidthCm: 60,
 } as const;
 export const MIN_FURNITURE_SEPARATION_CM = 10;
+export const SCORE_WEIGHTS = {
+  initial: 100,
+  criticalIssue: 22,
+  reviewIssue: 10,
+  clearWidthDeficitPerCm: 0.25,
+  changedObject: 2,
+  lostSeat: 4,
+  minimum: 0,
+  maximum: 100,
+} as const;
 export const DEFAULT_SEARCH_LIMITS: SearchLimits = {
   maxDepth: 4,
   beamWidth: 72,
@@ -569,13 +579,13 @@ export function auditPlan(plan: FloorPlan, baseline?: FloorPlan): AuditResult {
           objectId: object.id,
         });
   }
-  const minimumCenterlineClearanceCm = Math.round(
+  const minimumClearWidthCm = Math.round(
     Math.min(
       distanceFromRouteToWalls(plan),
       ...objectClearances.map((item) => item.centerlineClearanceCm),
-    ),
+    ) * 2,
   );
-  const minimumClearWidthCm = minimumCenterlineClearanceCm * 2;
+  const minimumCenterlineClearanceCm = minimumClearWidthCm / 2;
   const criticalIssues = issues.filter(
     (issue) => issue.severity === 'critical',
   ).length;
@@ -603,17 +613,17 @@ export function auditPlan(plan: FloorPlan, baseline?: FloorPlan): AuditResult {
       }).length
     : 0;
   const score = Math.max(
-    0,
+    SCORE_WEIGHTS.minimum,
     Math.min(
-      100,
+      SCORE_WEIGHTS.maximum,
       Math.round(
-        100 -
-          criticalIssues * 22 -
-          reviewIssues * 10 -
+        SCORE_WEIGHTS.initial -
+          criticalIssues * SCORE_WEIGHTS.criticalIssue -
+          reviewIssues * SCORE_WEIGHTS.reviewIssue -
           Math.max(0, THRESHOLDS.requiredClearWidthCm - minimumClearWidthCm) *
-            0.25 -
-          changedObjects * 2 -
-          Math.max(0, baselineCapacity - capacity) * 4,
+            SCORE_WEIGHTS.clearWidthDeficitPerCm -
+          changedObjects * SCORE_WEIGHTS.changedObject -
+          Math.max(0, baselineCapacity - capacity) * SCORE_WEIGHTS.lostSeat,
       ),
     ),
   );
@@ -678,8 +688,10 @@ export function validatePlan(
   lockedReference?: FloorPlan,
 ): PlanValidationResult {
   const errors: string[] = [];
-  if (typeof plan.id !== 'string' || !plan.id.trim()) errors.push('Plan ID must be non-empty.');
-  if (typeof plan.versionId !== 'string' || !plan.versionId.trim()) errors.push('Plan version ID must be non-empty.');
+  if (typeof plan.id !== 'string' || !plan.id.trim())
+    errors.push('Plan ID must be non-empty.');
+  if (typeof plan.versionId !== 'string' || !plan.versionId.trim())
+    errors.push('Plan version ID must be non-empty.');
   if (plan.unit !== 'cm') errors.push('Plan unit must be cm.');
   if (!Number.isFinite(plan.width) || plan.width <= 0)
     errors.push('Plan width must be a positive finite number.');
@@ -731,8 +743,10 @@ export function validatePlan(
     errors.push(`Duplicate zone ID: ${duplicate}.`);
 
   for (const object of plan.objects) {
-    if (typeof object.id !== 'string' || !object.id.trim()) errors.push('Object ID must be non-empty.');
-    if (typeof object.name !== 'string' || !object.name.trim()) errors.push(`${object.id || 'Object'} name must be non-empty.`);
+    if (typeof object.id !== 'string' || !object.id.trim())
+      errors.push('Object ID must be non-empty.');
+    if (typeof object.name !== 'string' || !object.name.trim())
+      errors.push(`${object.id || 'Object'} name must be non-empty.`);
     if (!isFinitePoint(object))
       errors.push(`${object.id} coordinates must be finite.`);
     if (
@@ -762,14 +776,19 @@ export function validatePlan(
   for (let index = 0; index < active.length; index += 1)
     for (const other of active.slice(index + 1))
       if (
-        active[index].kind !== 'destination' &&
-        other.kind !== 'destination' &&
-        rectsOverlap(expandRect(active[index], MIN_FURNITURE_SEPARATION_CM / 2), expandRect(other, MIN_FURNITURE_SEPARATION_CM / 2))
+        !(
+          active[index].kind === 'destination' && other.kind === 'destination'
+        ) &&
+        rectsOverlap(
+          expandRect(active[index], MIN_FURNITURE_SEPARATION_CM / 2),
+          expandRect(other, MIN_FURNITURE_SEPARATION_CM / 2),
+        )
       )
         errors.push(`${active[index].id} overlaps ${other.id}.`);
 
   for (const wall of plan.walls) {
-    if (typeof wall.id !== 'string' || !wall.id.trim()) errors.push('Wall ID must be non-empty.');
+    if (typeof wall.id !== 'string' || !wall.id.trim())
+      errors.push('Wall ID must be non-empty.');
     if (
       !isFinitePoint(wall.start) ||
       !isFinitePoint(wall.end) ||
@@ -832,6 +851,7 @@ function stablePlanContext(
 ): string {
   return JSON.stringify({
     planId: plan.id,
+    planName: plan.name,
     versionId: plan.versionId,
     width: plan.width,
     height: plan.height,
@@ -870,7 +890,7 @@ export function proposalContextFingerprint(
 ): string {
   let hash = 2_166_136_261;
   for (const character of stablePlanContext(plan, constraints)) {
-    hash ^= character.charCodeAt(0);
+    hash ^= character.codePointAt(0)!;
     hash = Math.imul(hash, 16_777_619);
   }
   return `ctx-${(hash >>> 0).toString(16).padStart(8, '0')}`;
@@ -971,6 +991,8 @@ function candidateChanges(
   object: PlanObject,
   allowRemoval: boolean,
 ): PlanChange[] {
+  // Derived from the 180 cm desk pitch, 100 × 64 cm desk footprint,
+  // 10 cm furniture separation, 45 cm route half-width, and open grid bays.
   const offsets = [
     [-70, 0],
     [110, 300],
@@ -979,13 +1001,6 @@ function candidateChanges(
     [160, 0],
     [-100, 0],
     [0, 80],
-    [0, 100],
-    [0, 120],
-    [80, 0],
-    [-80, 80],
-    [-120, 0],
-    [80, 80],
-    [120, 0],
   ] as const;
   if (!object.active)
     return offsets.slice(0, 3).map(([dx, dy]) => ({
@@ -1054,7 +1069,9 @@ export function satisfiesPlanningThresholds(
   );
 }
 
-function resolveSearchLimits(searchLimits: Partial<SearchLimits>): SearchLimits {
+function resolveSearchLimits(
+  searchLimits: Partial<SearchLimits>,
+): SearchLimits {
   const limits = { ...DEFAULT_SEARCH_LIMITS, ...searchLimits };
   for (const [name, value] of Object.entries(limits))
     if (!Number.isInteger(value) || value <= 0)
@@ -1062,12 +1079,21 @@ function resolveSearchLimits(searchLimits: Partial<SearchLimits>): SearchLimits 
   return limits;
 }
 
+function throwIfSearchAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The operation was aborted.', 'AbortError');
+}
+
 export function generateRouteAlternatives(
   plan: FloorPlan,
   constraints: PlanningConstraints,
   limit = 3,
   searchLimits: Partial<SearchLimits> = {},
+  signal?: AbortSignal,
 ): RouteProposal[] {
+  throwIfSearchAborted(signal);
   if (
     !Number.isInteger(constraints.minimumCapacity) ||
     constraints.minimumCapacity < 0
@@ -1124,7 +1150,8 @@ export function generateRouteAlternatives(
     depth += 1
   ) {
     const next: SearchState[] = [];
-    for (const state of frontier)
+    for (const state of frontier) {
+      throwIfSearchAborted(signal);
       for (const originalObject of problematic) {
         if (state.changedObjectIds.has(originalObject.id)) continue;
         const currentObject = state.plan.objects.find(
@@ -1135,10 +1162,15 @@ export function generateRouteAlternatives(
           currentObject.active &&
           planCapacity(state.plan) - currentObject.capacity >=
             constraints.minimumCapacity;
-        for (const change of candidateChanges(
-          currentObject,
-          allowRemoval,
-        ).slice(0, limits.maxCandidatesPerObject)) {
+        const candidates = candidateChanges(currentObject, allowRemoval);
+        const limitedCandidates = [
+          ...candidates.filter((change) => change.type === 'remove'),
+          ...candidates
+            .filter((change) => change.type !== 'remove')
+            .slice(0, limits.maxCandidatesPerObject),
+        ];
+        for (const change of limitedCandidates) {
+          throwIfSearchAborted(signal);
           if (evaluatedStates >= limits.maxEvaluatedStates) break;
           evaluatedStates += 1;
           const candidatePlan = applyChange(state.plan, change);
@@ -1164,6 +1196,7 @@ export function generateRouteAlternatives(
             results.push(candidate);
         }
       }
+    }
     frontier = next
       .sort(
         (a, b) =>

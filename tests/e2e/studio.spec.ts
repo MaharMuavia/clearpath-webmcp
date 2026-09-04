@@ -36,6 +36,25 @@ async function openStudio(page: Page) {
   await page.locator('html[data-clearpath-ready="true"]').waitFor();
 }
 
+test('serves crawl metadata and the not-found fallback', async ({
+  page,
+  request,
+}) => {
+  const robots = await request.get('/robots.txt');
+  expect(robots.status()).toBe(200);
+  expect(await robots.text()).toContain('Sitemap:');
+
+  const sitemap = await request.get('/sitemap.xml');
+  expect(sitemap.status()).toBe(200);
+  expect(await sitemap.text()).toContain('/studio');
+
+  const response = await page.goto('/does-not-exist');
+  expect(response?.status()).toBe(404);
+  await expect(
+    page.getByRole('heading', { name: 'This route is not in the plan.' }),
+  ).toBeVisible();
+});
+
 test('landing has no tools and studio registers the state-aware WebMCP surface', async ({
   page,
 }) => {
@@ -48,6 +67,18 @@ test('landing has no tools and studio registers the state-aware WebMCP surface',
   await expect(
     page.getByRole('heading', { name: 'North Hall classroom' }),
   ).toBeVisible();
+  const planTab = page.getByRole('tab', { name: 'plan' });
+  const compareTab = page.getByRole('tab', { name: 'compare' });
+  await expect(planTab).toHaveAttribute('aria-controls', 'studio-panel-plan');
+  await expect(planTab).toHaveAttribute('aria-selected', 'true');
+  await expect(planTab).toHaveAttribute('tabindex', '0');
+  await expect(compareTab).toHaveAttribute('tabindex', '-1');
+  await planTab.press('ArrowRight');
+  await expect(compareTab).toBeFocused();
+  await expect(compareTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel', { name: 'compare' })).toBeVisible();
+  await compareTab.press('End');
+  await expect(page.getByRole('tab', { name: 'history' })).toBeFocused();
   const names = await page.evaluate(() =>
     [...(window.__clearPathTools?.keys() ?? [])].sort(),
   );
@@ -116,6 +147,10 @@ test('lock, generate, stage, compare, human approve, apply, and undo', async ({
   await expect(
     page.getByText(/Restored exact plan version north-hall-v1/),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Audit trail' }).click();
+  await expect(
+    page.getByRole('listitem').filter({ hasText: 'plan change undone' }).first(),
+  ).toContainText('human · undone');
 });
 
 test('stage then reject leaves the committed version unchanged', async ({
@@ -129,6 +164,10 @@ test('stage then reject leaves the committed version unchanged', async ({
     page.getByText(/rejected; committed geometry unchanged/),
   ).toBeVisible();
   await expect(page.getByText('Version north-hall-v1')).toBeVisible();
+  await page.getByRole('button', { name: 'Audit trail' }).click();
+  await expect(
+    page.getByRole('listitem').filter({ hasText: 'proposal rejected' }).first(),
+  ).toContainText('human · rejected');
 });
 
 test('impossible capacity fails safely and the human UI works without WebMCP', async ({

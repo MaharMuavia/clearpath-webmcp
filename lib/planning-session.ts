@@ -141,12 +141,15 @@ export function generateAlternatives(
   session: PlanningSession,
   actor: AuditActor,
   factory: EventFactory = browserEventFactory,
+  signal?: AbortSignal,
 ): PlanningSession {
   try {
     const alternatives = generateRouteAlternatives(
       session.committed,
       session.constraints,
       3,
+      {},
+      signal,
     ).map((proposal) => ({ ...proposal, sessionRevision: session.revision }));
     return record({ ...session, alternatives, staged: null }, factory, {
       actor,
@@ -158,6 +161,29 @@ export function generateAlternatives(
       result: 'successful',
     });
   } catch (error) {
+    const cancelled =
+      signal?.aborted === true ||
+      (error instanceof DOMException && error.name === 'AbortError');
+    if (cancelled) {
+      const preserved = record(session, factory, {
+        actor,
+        action: 'alternatives_generated',
+        planId: session.committed.id,
+        summary:
+          error instanceof Error
+            ? error.message
+            : 'Proposal generation cancelled.',
+        beforeVersionId: session.committed.versionId,
+        afterVersionId: session.committed.versionId,
+        result: 'cancelled',
+      });
+      throw Object.assign(
+        error instanceof Error
+          ? error
+          : new DOMException('Proposal generation cancelled.', 'AbortError'),
+        { session: preserved },
+      );
+    }
     const failed = record(
       { ...session, alternatives: [], staged: null },
       factory,
@@ -311,7 +337,7 @@ export function rejectStagedProposal(
 
 export function undoLastChange(
   session: PlanningSession,
-  actor: 'human',
+  actor: AuditActor,
   factory: EventFactory = browserEventFactory,
 ): PlanningSession {
   const restored = session.undoStack.at(-1);

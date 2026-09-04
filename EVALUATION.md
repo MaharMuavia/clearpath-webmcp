@@ -17,8 +17,8 @@ Date: 2026-09-03. Automated evaluation uses the imperative `document.modelContex
 
 ## Automated evidence
 
-- Vitest: 3 files, 61 tests passing locally.
-- Chromium mock-host workflows are covered in source and must be rerun against the exact final revision; timing is environment-dependent.
+- Vitest: 5 files, 76 tests passing locally.
+- Chromium: 9 workflows passing locally against the final working tree.
 - Landing-page tool absence and studio-only tool registration: passing.
 - Dynamic `apply_staged_plan` lifecycle: passing.
 - Unsupported/no-WebMCP human workflow: passing.
@@ -27,6 +27,8 @@ Date: 2026-09-03. Automated evaluation uses the imperative `document.modelContex
 CI for the final working tree has not run because the changes are not committed or pushed. The deployed URL has not been verified against this source revision.
 
 ## Honest gaps
+
+The public deployment still requires authorization and must be redeployed and re-verified. Native ChatGPT tool discovery and selection remain untested in this local environment. Rotated-object collision uses axis-aligned bounds, the planning thresholds are not jurisdiction-specific rules, and browser-local state is not multi-user persistence.
 
 ## Native ChatGPT/WebMCP verification
 

@@ -102,6 +102,8 @@ html {
 }
 
 :root {
+  --studio-muted: #53655a;
+  --studio-subtle: #4f6156;
   --background: oklch(0.96 0.015 145);
   --foreground: oklch(0.22 0.035 145);
   --card: oklch(1 0 0);

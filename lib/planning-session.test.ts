@@ -77,6 +77,10 @@ describe('versioned planning session', () => {
       applyStagedProposal(applied, proposal.id, 'human', events),
     ).toThrow('rejected, stale');
     const restored = undoLastChange(applied, 'human', events);
+    expect(restored.history.at(-1)).toMatchObject({
+      actor: 'human',
+      action: 'plan_change_undone',
+    });
     expect(restored.committed).toEqual(original);
     expect(restored.alternatives).toEqual([]);
     expect(restored.staged).toBeNull();
@@ -163,6 +167,10 @@ describe('versioned planning session', () => {
     const staged = stageProposal(generated, proposal.id, 'agent', events);
     const committed = structuredClone(staged.committed);
     const rejected = rejectStagedProposal(staged, 'human', events);
+    expect(rejected.history.at(-1)).toMatchObject({
+      actor: 'human',
+      action: 'proposal_rejected',
+    });
     expect(rejected.committed).toEqual(committed);
     expect(rejected.alternatives).toEqual([]);
     expect(() => stageProposal(rejected, proposal.id, 'agent', events)).toThrow(
@@ -256,6 +264,38 @@ describe('versioned planning session', () => {
       expect(failed.committed).toEqual(committed);
       expect(failed.constraints).toEqual(initial.constraints);
       expect(failed.history.at(-1)?.result).toBe('failed');
+    }
+  });
+
+  it('an aborted search preserves the full review state and records cancellation', () => {
+    const generated = generatedSession();
+    const staged = stageProposal(
+      generated,
+      generated.alternatives[0].id,
+      'human',
+      events,
+    );
+    const before = structuredClone(staged);
+    const controller = new AbortController();
+    controller.abort(new DOMException('Cancelled by test.', 'AbortError'));
+
+    try {
+      generateAlternatives(staged, 'agent', events, controller.signal);
+      throw new Error('Expected proposal generation to be cancelled.');
+    } catch (error) {
+      const cancelled = (error as Error & { session: PlanningSession }).session;
+      expect(cancelled.committed).toEqual(before.committed);
+      expect(cancelled.alternatives).toEqual(before.alternatives);
+      expect(cancelled.staged).toEqual(before.staged);
+      expect(cancelled.constraints).toEqual(before.constraints);
+      expect(cancelled.undoStack).toEqual(before.undoStack);
+      expect(cancelled.revision).toBe(before.revision);
+      expect(cancelled.history.slice(0, -1)).toEqual(before.history);
+      expect(cancelled.history.at(-1)).toMatchObject({
+        actor: 'agent',
+        action: 'alternatives_generated',
+        result: 'cancelled',
+      });
     }
   });
 
