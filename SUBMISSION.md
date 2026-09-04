@@ -27,7 +27,7 @@ Tools use the current imperative `document.modelContext.registerTool()` interfac
 - Deterministic geometry and documented heuristic score.
 - Bounded ranked proposal search with hard constraints.
 - Exact committed/staged versions, stale-ID rejection, real events, and exact undo.
-- 74 unit/contract tests and 9 Chromium workflows passing locally.
+- 76 unit/contract tests and 9 Chromium workflows passing locally.
 - CI is configured for type checking, lint, tests, build, and browser workflows. The final revision is committed locally; CI and deployment identifiers must be recorded from their actual runs before submission.
 - `npm audit` reports zero vulnerabilities after compatible upgrades.
 

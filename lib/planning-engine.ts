@@ -125,7 +125,7 @@ export type AuditEvent = {
   summary: string;
   beforeVersionId?: string;
   afterVersionId?: string;
-  result: 'successful' | 'rejected' | 'failed' | 'undone';
+  result: 'successful' | 'rejected' | 'failed' | 'cancelled' | 'undone';
 };
 
 export const THRESHOLDS = {
@@ -688,8 +688,10 @@ export function validatePlan(
   lockedReference?: FloorPlan,
 ): PlanValidationResult {
   const errors: string[] = [];
-  if (typeof plan.id !== 'string' || !plan.id.trim()) errors.push('Plan ID must be non-empty.');
-  if (typeof plan.versionId !== 'string' || !plan.versionId.trim()) errors.push('Plan version ID must be non-empty.');
+  if (typeof plan.id !== 'string' || !plan.id.trim())
+    errors.push('Plan ID must be non-empty.');
+  if (typeof plan.versionId !== 'string' || !plan.versionId.trim())
+    errors.push('Plan version ID must be non-empty.');
   if (plan.unit !== 'cm') errors.push('Plan unit must be cm.');
   if (!Number.isFinite(plan.width) || plan.width <= 0)
     errors.push('Plan width must be a positive finite number.');
@@ -741,8 +743,10 @@ export function validatePlan(
     errors.push(`Duplicate zone ID: ${duplicate}.`);
 
   for (const object of plan.objects) {
-    if (typeof object.id !== 'string' || !object.id.trim()) errors.push('Object ID must be non-empty.');
-    if (typeof object.name !== 'string' || !object.name.trim()) errors.push(`${object.id || 'Object'} name must be non-empty.`);
+    if (typeof object.id !== 'string' || !object.id.trim())
+      errors.push('Object ID must be non-empty.');
+    if (typeof object.name !== 'string' || !object.name.trim())
+      errors.push(`${object.id || 'Object'} name must be non-empty.`);
     if (!isFinitePoint(object))
       errors.push(`${object.id} coordinates must be finite.`);
     if (
@@ -773,15 +777,18 @@ export function validatePlan(
     for (const other of active.slice(index + 1))
       if (
         !(
-          active[index].kind === 'destination' &&
-          other.kind === 'destination'
+          active[index].kind === 'destination' && other.kind === 'destination'
         ) &&
-        rectsOverlap(expandRect(active[index], MIN_FURNITURE_SEPARATION_CM / 2), expandRect(other, MIN_FURNITURE_SEPARATION_CM / 2))
+        rectsOverlap(
+          expandRect(active[index], MIN_FURNITURE_SEPARATION_CM / 2),
+          expandRect(other, MIN_FURNITURE_SEPARATION_CM / 2),
+        )
       )
         errors.push(`${active[index].id} overlaps ${other.id}.`);
 
   for (const wall of plan.walls) {
-    if (typeof wall.id !== 'string' || !wall.id.trim()) errors.push('Wall ID must be non-empty.');
+    if (typeof wall.id !== 'string' || !wall.id.trim())
+      errors.push('Wall ID must be non-empty.');
     if (
       !isFinitePoint(wall.start) ||
       !isFinitePoint(wall.end) ||
@@ -1062,7 +1069,9 @@ export function satisfiesPlanningThresholds(
   );
 }
 
-function resolveSearchLimits(searchLimits: Partial<SearchLimits>): SearchLimits {
+function resolveSearchLimits(
+  searchLimits: Partial<SearchLimits>,
+): SearchLimits {
   const limits = { ...DEFAULT_SEARCH_LIMITS, ...searchLimits };
   for (const [name, value] of Object.entries(limits))
     if (!Number.isInteger(value) || value <= 0)
@@ -1153,10 +1162,14 @@ export function generateRouteAlternatives(
           currentObject.active &&
           planCapacity(state.plan) - currentObject.capacity >=
             constraints.minimumCapacity;
-        for (const change of candidateChanges(
-          currentObject,
-          allowRemoval,
-        ).slice(0, limits.maxCandidatesPerObject)) {
+        const candidates = candidateChanges(currentObject, allowRemoval);
+        const limitedCandidates = [
+          ...candidates.filter((change) => change.type === 'remove'),
+          ...candidates
+            .filter((change) => change.type !== 'remove')
+            .slice(0, limits.maxCandidatesPerObject),
+        ];
+        for (const change of limitedCandidates) {
           throwIfSearchAborted(signal);
           if (evaluatedStates >= limits.maxEvaluatedStates) break;
           evaluatedStates += 1;

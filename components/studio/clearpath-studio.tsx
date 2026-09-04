@@ -158,8 +158,7 @@ export function ClearPathStudio() {
   const makeAlternatives = useCallback(
     (signal?: AbortSignal) =>
       transition(
-        (current) =>
-          generateAlternatives(current, 'agent', undefined, signal),
+        (current) => generateAlternatives(current, 'agent', undefined, signal),
         (next) =>
           `${next.alternatives.length} distinct geometry-derived alternatives generated.`,
       ),
@@ -413,9 +412,7 @@ export function ClearPathStudio() {
                   tabIndex={view === item ? 0 : -1}
                   key={item}
                   onClick={() => setView(item)}
-                  onKeyDown={(event) =>
-                    selectViewFromKeyboard(event, item)
-                  }
+                  onKeyDown={(event) => selectViewFromKeyboard(event, item)}
                   className={`rounded-lg px-3 py-2 text-xs font-bold capitalize ${view === item ? 'bg-[#edf4ec] text-[#214737]' : 'text-[var(--studio-muted)]'}`}
                 >
                   {item}
@@ -933,7 +930,7 @@ function CompareView({
           ]}
         />
       </div>
-      <div className="mt-3 rounded-xl bg-[#f1f6ef] p-4 text-[10px] leading-5 text-[#65736a]">
+      <div className="mt-3 rounded-xl bg-[#f1f6ef] p-4 text-[10px] leading-5 text-[var(--studio-muted)]">
         <p className="font-bold text-[#273b2f]">Capacity trade-off</p>
         <p>
           {capacityDelta < 0
@@ -960,7 +957,7 @@ function DetailList({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="rounded-xl border border-[#d6dfd5] p-4">
       <p className="text-xs font-bold">{title}</p>
-      <ul className="mt-2 space-y-1 text-[10px] leading-4 text-[#65736a]">
+      <ul className="mt-2 space-y-1 text-[10px] leading-4 text-[var(--studio-muted)]">
         {items.map((item) => (
           <li key={item}>{item}</li>
         ))}

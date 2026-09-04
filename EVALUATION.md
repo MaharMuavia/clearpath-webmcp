@@ -17,7 +17,7 @@ Date: 2026-09-03. Automated evaluation uses the imperative `document.modelContex
 
 ## Automated evidence
 
-- Vitest: 5 files, 74 tests passing locally.
+- Vitest: 5 files, 76 tests passing locally.
 - Chromium: 9 workflows passing locally against the final working tree.
 - Landing-page tool absence and studio-only tool registration: passing.
 - Dynamic `apply_staged_plan` lifecycle: passing.

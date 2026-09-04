@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createClassroomPlan,
-  type AuditActor,
-} from '@/lib/planning-engine';
+import { createClassroomPlan, type AuditActor } from '@/lib/planning-engine';
 import {
   applyStagedProposal,
   createPlanningSession,
@@ -21,9 +18,7 @@ function actions(session: PlanningSession) {
     generateAlternatives: vi.fn((_signal?: AbortSignal) => session),
     stageProposal: vi.fn(() => session),
     requestApproval: vi.fn(() => session),
-    rejectProposal: vi.fn(
-      (_proposalId: string, _actor: AuditActor) => session,
-    ),
+    rejectProposal: vi.fn((_proposalId: string, _actor: AuditActor) => session),
     undo: vi.fn((_actor: AuditActor) => session),
   };
 }
@@ -215,11 +210,7 @@ describe('WebMCP contracts', () => {
       actor: 'agent',
     });
 
-    const applied = applyStagedProposal(
-      staged,
-      staged.staged!.id,
-      'human',
-    );
+    const applied = applyStagedProposal(staged, staged.staged!.id, 'human');
     let undone: PlanningSession | undefined;
     const undoActions = actions(applied);
     undoActions.undo.mockImplementation((actor) => {
@@ -235,7 +226,7 @@ describe('WebMCP contracts', () => {
     });
   });
 
-  it('honors a per-execution abort during search without changing session state', () => {
+  it('forwards a per-execution abort signal to the real search', () => {
     const baseline = createPlanningSession(createClassroomPlan());
     const committed = structuredClone(baseline.committed);
     const constraints = structuredClone(baseline.constraints);
@@ -250,12 +241,7 @@ describe('WebMCP contracts', () => {
     const toolActions = actions(baseline);
     toolActions.generateAlternatives.mockImplementation(
       (executionSignal?: AbortSignal) =>
-        generateAlternatives(
-          baseline,
-          'agent',
-          undefined,
-          executionSignal,
-        ),
+        generateAlternatives(baseline, 'agent', undefined, executionSignal),
     );
     expect(() =>
       buildToolDefinitions(baseline, toolActions)

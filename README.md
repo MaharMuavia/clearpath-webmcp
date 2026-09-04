@@ -128,7 +128,7 @@ npm audit --audit-level=high
 
 CI runs type checking, lint, unit/integration tests, build, and Chromium end-to-end tests on pushes and pull requests.
 
-Current local evidence: 74 Vitest unit/contract tests and 9 Chromium workflows pass locally. Native ChatGPT tool selection, deployment, and CI for the final revision require environment-specific verification; mock-host results must not be treated as native-host evidence.
+Current local evidence: 76 Vitest unit/contract tests and 9 Chromium workflows pass locally. Native ChatGPT tool selection, deployment, and CI for the final revision require environment-specific verification; mock-host results must not be treated as native-host evidence.
 
 ## Limitations
 
